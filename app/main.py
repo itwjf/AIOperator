@@ -20,17 +20,19 @@ app = FastAPI(
 
 
 # === 注册路由 ===
-# 第一阶段只写一个最简路由，后续阶段再拆分到 api/ 目录下
+# 按模块拆分路由，用 include_router 注册
+# 每个模块只管自己的前缀路径（如 /api），main.py 不需要知道细节
 
 
 @app.get("/health")
 async def health_check():
-    """健康检查接口 — 用于验证服务是否正常运行。
-
-    返回固定的 {"status": "ok"}，不做任何复杂逻辑。
-    后续可以扩展：检查数据库连接、外部服务可达性等。
-    """
+    """健康检查接口 — 用于验证服务是否正常运行。"""
     return {"status": "ok"}
+
+
+from app.api.chat import router as chat_router
+
+app.include_router(chat_router)
 
 
 # === 启动入口 ===

@@ -21,10 +21,12 @@ class Settings(BaseSettings):
     app_port: int = 9900
     debug: bool = True
 
-    # ---- LLM 配置（第二阶段才用，先占位）----
+    # ---- LLM 配置（阿里云 DashScope / 百炼平台）----
+    # 通过 OpenAI 兼容接口调用通义千问，所以用 langchain_openai.ChatOpenAI
     dashscope_api_key: Optional[str] = None
-    llm_model: str = "qwen-max"
+    llm_model: str = "qwen-plus"  # qwen-plus 性价比最高，学习够用
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    llm_temperature: float = 0.7  # 0=确定性强，0.7=有一定创造性
 
     # 告诉 pydantic-settings 去读 .env 文件
     # env_file 找不到不会报错（比如生产环境用真正的环境变量）

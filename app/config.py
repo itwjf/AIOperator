@@ -1,0 +1,35 @@
+"""
+应用配置 — 使用 pydantic-settings 从 .env 文件加载所有配置项。
+
+为什么用 pydantic-settings 而不是 os.getenv()？
+  - 自动类型转换（str/int/bool 不用手动 cast）
+  - 字段名即配置名，不需要到处写字符串 key
+  - 新增配置项只需加一个字段，IDE 有自动补全
+"""
+
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+
+class Settings(BaseSettings):
+    """应用的全局配置，所有字段自动从 .env 读取。"""
+
+    # ---- 应用基础配置 ----
+    app_name: str = "AIOperator"
+    app_version: str = "0.1.0"
+    app_host: str = "127.0.0.1"
+    app_port: int = 9900
+    debug: bool = True
+
+    # ---- LLM 配置（第二阶段才用，先占位）----
+    dashscope_api_key: Optional[str] = None
+    llm_model: str = "qwen-max"
+    llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+    # 告诉 pydantic-settings 去读 .env 文件
+    # env_file 找不到不会报错（比如生产环境用真正的环境变量）
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+
+# 全局唯一的配置实例 — 其他模块都 from config import settings 来用
+settings = Settings()

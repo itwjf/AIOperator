@@ -72,11 +72,15 @@ def _get_agent():
     if _agent is None:
         llm = create_llm(temperature=0.7, streaming=True)
 
+                # create_agent 会自动根据 system_prompt 和工具定义，构建一个能自动规划调用工具的 Agent。
+                # 封装了 LangGraph 的 StateGraph + ToolNodes，开发者只需提供 LLM、工具和提示词。
+                # Agent 内部会根据用户输入和对话历史，自动判断是否需要调用工具，并处理工具调用的结果。
+                # 例如，用户问了一个技术问题，Agent 会判断需要查知识库，就自动调用 retrieve_knowledge 工具，拿到文档后再生成回答。
         _agent = create_agent(
-            llm,
-            tools=[retrieve_knowledge],
-            checkpointer=_get_memory(),
-            system_prompt=SYSTEM_PROMPT,
+            llm,                        # 语言模型
+            tools=[retrieve_knowledge], # 工具列表
+            checkpointer=_get_memory(), # 记忆（会话持久化）
+            system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
         )
     return _agent
 

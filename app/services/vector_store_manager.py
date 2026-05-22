@@ -108,9 +108,11 @@ async def delete_by_source(file_path: str) -> int:
     client = get_milvus_client()
 
     # 用 JSON 字段过滤：metadata 中的 source 字段匹配
+    # Windows 路径的 \ 会被 Milvus 表达式解析器误解为转义字符，统一转成 /
+    normalized_path = file_path.replace("\\", "/")
     results = client.query(
         collection_name=settings.milvus_collection_name,
-        filter=f'metadata["source"] == "{file_path}"',
+        filter=f'metadata["source"] == "{normalized_path}"',
         output_fields=["id"],
     )
 

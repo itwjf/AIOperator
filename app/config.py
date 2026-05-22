@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_temperature: float = 0.7  # 0=确定性强，0.7=有一定创造性
 
+    # ---- Milvus 向量数据库 ----
+    milvus_host: str = "127.0.0.1"
+    milvus_port: int = 19530
+    milvus_collection_name: str = "aiops_knowledge"
+
+    # ---- Embedding 模型 ----
+    embedding_model: str = "text-embedding-v4"  # DashScope 的向量化模型
+    embedding_dimension: int = 1024  # text-embedding-v4 输出 1024 维
+
     # 告诉 pydantic-settings 去读 .env 文件
     # env_file 找不到不会报错（比如生产环境用真正的环境变量）
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}

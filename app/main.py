@@ -34,11 +34,13 @@ from app.api.chat import router as chat_router
 from app.api.file import router as file_router
 from app.api.agent import router as agent_router
 from app.api.aiops import router as aiops_router
+from app.api.mcp import router as mcp_router
 
 app.include_router(chat_router)
 app.include_router(file_router)
 app.include_router(agent_router)
 app.include_router(aiops_router)
+app.include_router(mcp_router)
 
 
 # === 启动入口 ===

@@ -14,4 +14,6 @@ dependencies = [
     "sse-starlette>=2.0.0",
     "pymilvus>=2.4.0",
     "python-multipart>=0.0.9",
+    "fastmcp>=3.0.0",
+    "langchain-mcp-adapters>=0.2.0",
 ]

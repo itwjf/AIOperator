@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIOperator — 智能运维助手</title>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- marked.js -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <!-- 自定义样式 -->
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 侧边栏 — 会话列表 -->
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <div class="sidebar-header">
+        <button class="btn-new-session" @click="newSession">+ 新建会话</button>
+        <button class="btn-toggle" @click="sidebarCollapsed = !sidebarCollapsed" title="折叠侧边栏">
+          {{ sidebarCollapsed ? '▶' : '◀' }}
+        </button>
+      </div>
+      <ul class="session-list">
+        <li v-for="s in sessions" :key="s.id"
+            :class="{ active: s.id === currentSessionId }"
+            @click="switchSession(s.id)">
+          <span class="session-name">{{ s.name }}</span>
+          <button class="btn-delete-session" @click.stop="deleteSession(s.id)"
+                  :disabled="sessions.length <= 1">×</button>
+        </li>
+      </ul>
+      <div class="sidebar-footer">
+        <label class="upload-btn">
+          📄 上传文档
+          <input type="file" accept=".md,.txt" @change="uploadFile" hidden>
+        </label>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <main class="main">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <button class="btn-toggle" @click="sidebarCollapsed = !sidebarCollapsed"
+                v-if="sidebarCollapsed">▶</button>
+        <h1>AIOperator</h1>
+        <div class="mode-tabs">
+          <button :class="{ active: chatMode === 'chat' }" @click="chatMode = 'chat'">💬 对话</button>
+          <button :class="{ active: chatMode === 'agent' }" @click="chatMode = 'agent'">🤖 Agent</button>
+          <button :class="{ active: chatMode === 'aiops' }" @click="startAIOps">🔍 诊断</button>
+          <button :class="{ active: chatMode === 'mcp' }" @click="chatMode = 'mcp'">🔌 MCP</button>
+        </div>
+        <label class="stream-toggle">
+          <input type="checkbox" v-model="useStream"> 流式
+        </label>
+      </header>
+
+      <!-- 消息区 -->
+      <section class="messages" ref="msgContainer">
+        <div v-if="messages.length === 0" class="empty-state">
+          <p>👋 我是智能运维助手，可以帮你：</p>
+          <ul>
+            <li>💬 <b>对话模式</b>：RAG 知识检索问答</li>
+            <li>🤖 <b>Agent 模式</b>：手动 Agent 图（bind_tools + ToolNode）</li>
+            <li>🔍 <b>诊断模式</b>：Plan-Execute-Replan 自动诊断</li>
+            <li>🔌 <b>MCP 模式</b>：本地 + MCP 远程工具混合</li>
+          </ul>
+        </div>
+
+        <div v-for="(msg, i) in messages" :key="i" :class="['msg', msg.role]">
+          <div class="msg-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
+          <div class="msg-body">
+            <div class="msg-meta">{{ msg.role === 'user' ? '你' : 'AI' }}
+              <span v-if="msg.toolCalls?.length">
+                — 调用了：{{ msg.toolCalls.join(', ') }}
+              </span>
+            </div>
+
+            <!-- AIOps 诊断卡片 -->
+            <div v-if="msg.aiopsPlan" class="aiops-plan">
+              <h4>📋 诊断计划</h4>
+              <ol>
+                <li v-for="(step, si) in msg.aiopsPlan" :key="si"
+                    :class="{ done: msg.aiopsResults[si], current: si === msg.aiopsCurrent }">
+                  {{ step }}
+                  <span v-if="si === msg.aiopsCurrent && !msg.aiopsResults[si]" class="spinner">⏳</span>
+                  <span v-if="msg.aiopsResults[si]">✅</span>
+                  <div v-if="msg.aiopsResults[si]" class="step-result">{{ msg.aiopsResults[si] }}</div>
+                </li>
+              </ol>
+            </div>
+
+            <!-- 消息内容 -->
+            <div class="msg-content" v-html="msg.html"></div>
+          </div>
+        </div>
+
+        <!-- 加载指示器 -->
+        <div v-if="loading" class="msg assistant">
+          <div class="msg-avatar">🤖</div>
+          <div class="msg-body"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+        </div>
+      </section>
+
+      <!-- 输入区 -->
+      <footer class="input-area">
+        <textarea
+          ref="inputBox"
+          v-model="input"
+          @keydown.enter.exact.prevent="sendMessage"
+          placeholder="输入问题，Enter 发送，Shift+Enter 换行…"
+          :disabled="loading"
+          rows="1"
+        ></textarea>
+        <button class="btn-send" @click="sendMessage" :disabled="loading || !input.trim()">发送</button>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

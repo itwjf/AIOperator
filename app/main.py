@@ -6,6 +6,8 @@ FastAPI 应用入口 — 创建应用实例、注册路由、启动服务。
 """
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 import uvicorn
 
 from app.config import settings
@@ -41,6 +43,16 @@ app.include_router(file_router)
 app.include_router(agent_router)
 app.include_router(aiops_router)
 app.include_router(mcp_router)
+
+
+# === 静态文件（前端页面）===
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/")
+async def root():
+    """根路径重定向到前端页面。"""
+    return RedirectResponse(url="/static/index.html")
 
 
 # === 启动入口 ===

@@ -91,10 +91,14 @@ const app = createApp({
     }
 
     function persistMessages() {
-      localStorage.setItem(
-        MSG_PREFIX + currentSessionId.value,
-        JSON.stringify(messages.value.slice(-50)) // 最多保存 50 条
-      );
+      try {
+        localStorage.setItem(
+          MSG_PREFIX + currentSessionId.value,
+          JSON.stringify(messages.value.slice(-50))
+        );
+      } catch (e) {
+        console.error('persistMessages 失败:', e);
+      }
     }
 
     watch(messages, () => persistMessages(), { deep: true });
@@ -172,8 +176,8 @@ const app = createApp({
 
     // --- 流式（SSE via fetch） ---
     async function runStreamChat(question, url) {
-      const msg = { role: 'assistant', html: '', toolCalls: [] };
-      messages.value.push(msg);
+      messages.value.push({ role: 'assistant', html: '', toolCalls: [] });
+      const msg = messages.value[messages.value.length - 1];
 
       let buffer = '';
 
@@ -223,6 +227,7 @@ const app = createApp({
         msg.html = renderMarkdown(`**连接失败：** ${e.message}`);
       } finally {
         loading.value = false;
+        persistMessages();
         scrollBottom();
         nextTick(() => highlightCode());
       }
@@ -238,15 +243,15 @@ const app = createApp({
     }
 
     async function runAIOps() {
-      const msg = {
+      messages.value.push({
         role: 'assistant',
         html: '',
         toolCalls: [],
         aiopsPlan: [],
         aiopsResults: {},
         aiopsCurrent: -1,
-      };
-      messages.value.push(msg);
+      });
+      const msg = messages.value[messages.value.length - 1];
 
       let reportBuffer = '';
 
@@ -309,6 +314,7 @@ const app = createApp({
         msg.html = renderMarkdown(`**连接失败：** ${e.message}`);
       } finally {
         loading.value = false;
+        persistMessages();
         scrollBottom();
         nextTick(() => highlightCode());
       }

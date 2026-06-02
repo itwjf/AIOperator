@@ -33,7 +33,12 @@ SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
    当用户需要查看或分析数据库中的数据时使用。
    先 list_tables 了解有哪些表，再用 describe_table 看结构，最后 execute_query 查数据。
 
-4. **通用对话**：
+4. **PPT 生成**（create_presentation / add_table_slide / add_content_slide / export_pptx 工具）：
+   当用户要求生成 PPT 或报告时使用。
+   流程：create_presentation 初始化 → 根据需要交替使用 add_table_slide 和 add_content_slide
+   → 最后 export_pptx 导出文件。
+
+5. **通用对话**：
    不涉及以上工具的日常闲聊，直接回答。
 
 重要规则：
@@ -90,11 +95,14 @@ async def _get_agent():
     """
     global _agent
     if _agent is None:
+        # 重置 MCP 连接 → 强制重新获取工具定义（避免缓存旧签名）
+        mcp = get_mcp_client()
+        mcp.reset()
+
         # 本地工具：始终可用
         local_tools = [retrieve_knowledge]
 
         # MCP 远程工具：可能不可用（自愈）
-        mcp = get_mcp_client()
         mcp_tools = await mcp.get_tools()
 
         # 合并工具列表

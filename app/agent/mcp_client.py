@@ -25,6 +25,10 @@ MCP_SERVERS = {
         "transport": "streamable-http",
         "url": "http://127.0.0.1:8004/mcp",
     },
+    "ppt_tool": {
+        "transport": "streamable-http",
+        "url": "http://127.0.0.1:8005/mcp",
+    },
 }
 
 # 重试配置
@@ -56,6 +60,15 @@ class MCPClientManager:
         if self._client is None:
             self._client = MultiServerMCPClient(MCP_SERVERS)
         return self._client
+
+    def reset(self):
+        """重置连接和工具缓存，强制下次 get_tools() 重新连接所有 MCP Server。
+
+        使用场景：MCP Server 重启后工具签名变化时调用。
+        """
+        self._client = None
+        self._tools = []
+        self._connected = False
 
     async def get_tools(self) -> list:
         """获取所有 MCP 远程工具。

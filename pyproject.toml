@@ -17,4 +17,5 @@ dependencies = [
     "fastmcp>=3.0.0",
     "langchain-mcp-adapters>=0.2.0",
     "pymysql>=1.1.0",
+    "python-pptx>=1.0.0",
 ]

@@ -45,7 +45,9 @@ const app = createApp({
     const loading = ref(false);
     const useStream = ref(true);
     const chatMode = ref('chat');
-    const sidebarCollapsed = ref(false);
+    const sidebarCollapsed = ref(true);   // 默认收起，避免遮罩挡住页面
+    const showDiagnosisModal = ref(false);   // 诊断确认弹窗
+    const diagnosisScope = ref('');          // 诊断范围输入
 
     const msgContainer = ref(null);
     const inputBox = ref(null);
@@ -127,6 +129,58 @@ const app = createApp({
       });
     }
 
+    // --- 会话自动命名 ---
+    // 匹配 "会话 N" 格式（N 为数字），判断是否默认名称
+    function isDefaultSessionName(name) {
+      return /^会话 \d+$/.test(name);
+    }
+
+    // 从消息文本中截取前 25 个有效字符作为标题
+    function extractTitle(text) {
+      // 去掉 Markdown 标记
+      const plain = text
+        .replace(/[#*`~>\[\]()!_]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (plain.length <= 25) return plain;
+      return plain.slice(0, 25) + '…';
+    }
+
+    // 第一级：即时截取命名
+    function autoNameFromMessage(text) {
+      const session = sessions.value.find(s => s.id === currentSessionId.value);
+      if (!session || !isDefaultSessionName(session.name)) return;
+      session.name = extractTitle(text);
+    }
+
+    // 第二级：AI 摘要命名（异步，失败静默降级）
+    async function summarizeTitle() {
+      const session = sessions.value.find(s => s.id === currentSessionId.value);
+      if (!session) return;
+
+      // 取最近几条消息拼成上下文
+      const recent = messages.value.slice(-6);
+      const content = recent
+        .map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.html.replace(/<[^>]*>/g, '').slice(0, 300)}`)
+        .join('\n');
+
+      if (!content.trim()) return;
+
+      try {
+        const res = await fetch('/api/title/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        const data = await res.json();
+        if (data.title && data.title.length >= 2) {
+          session.name = data.title;
+        }
+      } catch {
+        // 降级：保持第一级截取标题
+      }
+    }
+
     // --- 调 API ---
     const API_BASE = '';
 
@@ -147,12 +201,14 @@ const app = createApp({
 
       // 添加用户消息
       messages.value.push({ role: 'user', html: renderMarkdown(text) });
+      autoNameFromMessage(text);  // 第一级：即时截取命名
       scrollBottom();
       loading.value = true;
 
       // AIOps 诊断模式 — 特殊处理
       if (chatMode.value === 'aiops') {
         await runAIOps();
+        summarizeTitle();  // 第二级：AI 摘要优化
         return;
       }
 
@@ -161,6 +217,7 @@ const app = createApp({
       } else {
         await runNonStreamChat(text, getApiUrl());
       }
+      summarizeTitle();  // 第二级：AI 摘要优化
     }
 
     // --- 非流式 ---
@@ -243,10 +300,31 @@ const app = createApp({
     // --- AIOps 诊断 ---
     function startAIOps() {
       chatMode.value = 'aiops';
-      messages.value.push({ role: 'user', html: renderMarkdown('启动系统全面诊断…') });
+      diagnosisScope.value = '';
+      showDiagnosisModal.value = true;
+      // 聚焦弹窗输入框
+      nextTick(() => {
+        const el = document.querySelector('.modal-card textarea');
+        if (el) el.focus();
+      });
+    }
+
+    function confirmDiagnosis() {
+      showDiagnosisModal.value = false;
+      const scope = diagnosisScope.value.trim();
+      const text = scope
+        ? `启动系统诊断，重点关注：${scope}`
+        : '启动系统全面诊断';
+      messages.value.push({ role: 'user', html: renderMarkdown(text) });
+      autoNameFromMessage(text);
       scrollBottom();
       loading.value = true;
-      runAIOps();
+      runAIOps().then(() => summarizeTitle());
+    }
+
+    function cancelDiagnosis() {
+      showDiagnosisModal.value = false;
+      diagnosisScope.value = '';
     }
 
     async function runAIOps() {
@@ -266,7 +344,10 @@ const app = createApp({
         const res = await fetch('/api/aiops', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: currentSessionId.value }),
+          body: JSON.stringify({
+            session_id: currentSessionId.value,
+            scope: diagnosisScope.value.trim() || undefined,
+          }),
         });
 
         const reader = res.body.getReader();
@@ -367,9 +448,11 @@ const app = createApp({
     return {
       sessions, currentSessionId, messages, input, loading,
       useStream, chatMode, modeIndex, sidebarCollapsed,
+      showDiagnosisModal, diagnosisScope,
       msgContainer, inputBox,
       newSession, switchSession, deleteSession,
-      sendMessage, startAIOps, uploadFile,
+      sendMessage, startAIOps, confirmDiagnosis, cancelDiagnosis,
+      uploadFile,
     };
   },
 });

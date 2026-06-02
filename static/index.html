@@ -6,10 +6,8 @@
   <title>AIOperator — AI 智能运维助手</title>
   <link rel="icon" href="data:,">
 
-  <!-- Inter Font -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@350;400;450;500;550;600;650;700&display=swap" rel="stylesheet">
+  <!-- 系统原生字体（无需外链，秒加载） -->
+  <!-- Inter 回退：SF Pro → PingFang → 系统默认 -->
 
   <!-- Vue 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -190,6 +188,33 @@
         </div>
       </footer>
     </main>
+
+    <!-- 诊断确认弹窗 -->
+    <div v-if="showDiagnosisModal" class="modal-overlay" @click.self="cancelDiagnosis">
+      <div class="modal-card">
+        <button class="modal-close-btn" @click="cancelDiagnosis" aria-label="关闭弹窗">×</button>
+        <h3>启动系统诊断</h3>
+        <p class="modal-desc">将对当前系统执行自动诊断，包括以下步骤：</p>
+        <ul class="modal-checklist">
+          <li>检查系统服务运行状态</li>
+          <li>分析日志中的异常模式</li>
+          <li>检测资源使用瓶颈</li>
+          <li>生成诊断报告与修复建议</li>
+        </ul>
+        <textarea
+          v-model="diagnosisScope"
+          placeholder="指定诊断范围（可选），如：数据库连接池"
+          rows="2"
+          @keydown.enter.exact.prevent="confirmDiagnosis"
+          @keydown.escape="cancelDiagnosis"
+          aria-label="诊断范围输入"
+        ></textarea>
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="cancelDiagnosis">取消</button>
+          <button class="btn-confirm" @click="confirmDiagnosis">开始诊断</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>

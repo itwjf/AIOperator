@@ -2,9 +2,15 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AIOperator — 智能运维助手</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AIOperator — AI 智能运维助手</title>
   <link rel="icon" href="data:,">
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@350;400;450;500;550;600;650;700&display=swap" rel="stylesheet">
+
   <!-- Vue 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <!-- marked.js -->
@@ -12,31 +18,41 @@
   <!-- highlight.js -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <!-- 自定义样式 -->
+  <!-- Custom styles -->
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <div id="app">
-    <!-- 侧边栏 — 会话列表 -->
-    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+    <!-- 侧边栏遮罩 -->
+    <div class="sidebar-backdrop"
+         :class="{ 'sidebar-backdown': sidebarCollapsed }"
+         @click="sidebarCollapsed = true"
+         aria-hidden="true"></div>
+
+    <!-- 侧边栏 — 浅色毛玻璃覆盖层 -->
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }" aria-label="会话管理">
       <div class="sidebar-header">
-        <button class="btn-new-session" @click="newSession">+ 新建会话</button>
-        <button class="btn-toggle" @click="sidebarCollapsed = !sidebarCollapsed" title="折叠侧边栏">
-          {{ sidebarCollapsed ? '▶' : '◀' }}
+        <button class="btn-new-session" @click="newSession" aria-label="新建会话">
+          + 新建会话
         </button>
+        <button class="btn-toggle" @click="sidebarCollapsed = !sidebarCollapsed"
+                aria-label="收起侧边栏">◀</button>
       </div>
-      <ul class="session-list">
+      <ul class="session-list" role="listbox" aria-label="会话列表">
         <li v-for="s in sessions" :key="s.id"
             :class="{ active: s.id === currentSessionId }"
-            @click="switchSession(s.id)">
+            @click="switchSession(s.id)"
+            role="option"
+            :aria-selected="s.id === currentSessionId ? 'true' : 'false'">
           <span class="session-name">{{ s.name }}</span>
           <button class="btn-delete-session" @click.stop="deleteSession(s.id)"
-                  :disabled="sessions.length <= 1">×</button>
+                  :disabled="sessions.length <= 1"
+                  :aria-label="'删除 ' + s.name">×</button>
         </li>
       </ul>
       <div class="sidebar-footer">
-        <label class="upload-btn">
-          📄 上传文档
+        <label class="upload-btn" aria-label="上传文档，支持 Markdown 和文本文件">
+          ↑ 上传文档
           <input type="file" accept=".md,.txt" @change="uploadFile" hidden>
         </label>
       </div>
@@ -46,78 +62,132 @@
     <main class="main">
       <!-- 顶栏 -->
       <header class="topbar">
-        <button class="btn-toggle" @click="sidebarCollapsed = !sidebarCollapsed"
-                v-if="sidebarCollapsed">▶</button>
+        <button class="btn-menu" @click="sidebarCollapsed = !sidebarCollapsed"
+                aria-label="切换侧边栏">
+          <span class="menu-icon">
+            <span></span><span></span><span></span>
+          </span>
+        </button>
         <h1>AIOperator</h1>
-        <div class="mode-tabs">
-          <button :class="{ active: chatMode === 'chat' }" @click="chatMode = 'chat'">💬 对话</button>
-          <button :class="{ active: chatMode === 'agent' }" @click="chatMode = 'agent'">🤖 Agent</button>
-          <button :class="{ active: chatMode === 'aiops' }" @click="startAIOps">🔍 诊断</button>
-          <button :class="{ active: chatMode === 'mcp' }" @click="chatMode = 'mcp'">🔌 MCP</button>
+
+        <!-- 模式切换 — 液态玻璃滑动指示器 -->
+        <div class="mode-tabs"
+             :data-active="modeIndex"
+             role="tablist"
+             aria-label="操作模式">
+          <button :class="{ active: chatMode === 'chat' }"
+                  @click="chatMode = 'chat'"
+                  role="tab" aria-selected="false">对话</button>
+          <button :class="{ active: chatMode === 'agent' }"
+                  @click="chatMode = 'agent'"
+                  role="tab" aria-selected="false">Agent</button>
+          <button :class="{ active: chatMode === 'aiops' }"
+                  @click="startAIOps"
+                  role="tab" aria-selected="false">诊断</button>
+          <button :class="{ active: chatMode === 'mcp' }"
+                  @click="chatMode = 'mcp'"
+                  role="tab" aria-selected="false">MCP</button>
         </div>
-        <label class="stream-toggle">
-          <input type="checkbox" v-model="useStream"> 流式
+
+        <label class="stream-toggle" aria-label="切换流式响应">
+          <input type="checkbox" v-model="useStream">
+          流式
         </label>
       </header>
 
       <!-- 消息区 -->
-      <section class="messages" ref="msgContainer">
+      <section class="messages" ref="msgContainer" aria-live="polite" aria-label="对话内容">
+        <!-- 空状态 -->
         <div v-if="messages.length === 0" class="empty-state">
-          <p>👋 我是智能运维助手，可以帮你：</p>
+          <p class="greeting">AI 智能运维助手</p>
+          <p class="subtitle">基于 RAG + Agent + MCP 的企业级运维平台</p>
           <ul>
-            <li>💬 <b>对话模式</b>：RAG 知识检索问答</li>
-            <li>🤖 <b>Agent 模式</b>：手动 Agent 图（bind_tools + ToolNode）</li>
-            <li>🔍 <b>诊断模式</b>：Plan-Execute-Replan 自动诊断</li>
-            <li>🔌 <b>MCP 模式</b>：本地 + MCP 远程工具混合</li>
+            <li @click="chatMode = 'chat'">
+              <span class="mode-icon chat">R</span>
+              <b>对话模式</b>
+              <span>RAG 知识库检索，智能问答</span>
+            </li>
+            <li @click="chatMode = 'agent'">
+              <span class="mode-icon agent">A</span>
+              <b>Agent 模式</b>
+              <span>工具调用 + 多步推理</span>
+            </li>
+            <li @click="startAIOps">
+              <span class="mode-icon aiops">D</span>
+              <b>诊断模式</b>
+              <span>自动诊断，计划执行</span>
+            </li>
+            <li @click="chatMode = 'mcp'">
+              <span class="mode-icon mcp">M</span>
+              <b>MCP 模式</b>
+              <span>多协议工具混合调用</span>
+            </li>
           </ul>
         </div>
 
-        <div v-for="(msg, i) in messages" :key="i" :class="['msg', msg.role]">
-          <div class="msg-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
-          <div class="msg-body">
-            <div class="msg-meta">{{ msg.role === 'user' ? '你' : 'AI' }}
-              <span v-if="msg.toolCalls?.length">
-                — 调用了：{{ msg.toolCalls.join(', ') }}
-              </span>
+        <!-- 消息列表 -->
+        <div v-for="(msg, i) in messages" :key="i" class="msg-wrapper">
+          <div :class="['msg', msg.role]">
+            <div class="msg-avatar" aria-hidden="true">
+              {{ msg.role === 'user' ? 'U' : 'AI' }}
             </div>
+            <div class="msg-body">
+              <div class="msg-meta">{{ msg.role === 'user' ? '你' : 'AI 助手' }}
+                <span v-if="msg.toolCalls?.length">
+                  · {{ msg.toolCalls.join(' · ') }}
+                </span>
+              </div>
 
-            <!-- AIOps 诊断卡片 -->
-            <div v-if="msg.aiopsPlan" class="aiops-plan">
-              <h4>📋 诊断计划</h4>
-              <ol>
-                <li v-for="(step, si) in msg.aiopsPlan" :key="si"
-                    :class="{ done: msg.aiopsResults[si], current: si === msg.aiopsCurrent }">
-                  {{ step }}
-                  <span v-if="si === msg.aiopsCurrent && !msg.aiopsResults[si]" class="spinner">⏳</span>
-                  <span v-if="msg.aiopsResults[si]">✅</span>
-                  <div v-if="msg.aiopsResults[si]" class="step-result">{{ msg.aiopsResults[si] }}</div>
-                </li>
-              </ol>
+              <!-- AIOps 诊断卡片 -->
+              <div v-if="msg.aiopsPlan" class="aiops-plan">
+                <h4>诊断计划</h4>
+                <ol>
+                  <li v-for="(step, si) in msg.aiopsPlan" :key="si"
+                      :class="{ done: msg.aiopsResults[si], current: si === msg.aiopsCurrent }">
+                    {{ step }}
+                    <span v-if="si === msg.aiopsCurrent && !msg.aiopsResults[si]" class="spinner">⏳</span>
+                    <span v-if="msg.aiopsResults[si]">✓</span>
+                    <div v-if="msg.aiopsResults[si]" class="step-result">{{ msg.aiopsResults[si] }}</div>
+                  </li>
+                </ol>
+              </div>
+
+              <!-- 消息内容 -->
+              <div class="msg-content" v-html="msg.html"></div>
             </div>
-
-            <!-- 消息内容 -->
-            <div class="msg-content" v-html="msg.html"></div>
           </div>
         </div>
 
         <!-- 加载指示器 -->
-        <div v-if="loading" class="msg assistant">
-          <div class="msg-avatar">🤖</div>
-          <div class="msg-body"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+        <div v-if="loading" class="msg-wrapper">
+          <div class="msg assistant">
+            <div class="msg-avatar" aria-hidden="true">AI</div>
+            <div class="msg-body">
+              <div class="typing-indicator"><span></span><span></span><span></span></div>
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- 输入区 -->
       <footer class="input-area">
-        <textarea
-          ref="inputBox"
-          v-model="input"
-          @keydown.enter.exact.prevent="sendMessage"
-          placeholder="输入问题，Enter 发送，Shift+Enter 换行…"
-          :disabled="loading"
-          rows="1"
-        ></textarea>
-        <button class="btn-send" @click="sendMessage" :disabled="loading || !input.trim()">发送</button>
+        <div class="input-area-wrapper">
+          <textarea
+            ref="inputBox"
+            v-model="input"
+            @keydown.enter.exact.prevent="sendMessage"
+            placeholder="输入消息，Enter 发送…"
+            :disabled="loading"
+            rows="1"
+            aria-label="消息输入框"
+          ></textarea>
+          <button class="btn-send"
+                  @click="sendMessage"
+                  :disabled="loading || !input.trim()"
+                  aria-label="发送消息">
+            ↑
+          </button>
+        </div>
       </footer>
     </main>
   </div>

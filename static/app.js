@@ -50,6 +50,12 @@ const app = createApp({
     const msgContainer = ref(null);
     const inputBox = ref(null);
 
+    // 液态玻璃模式切换指示器 — 映射 chatMode 到索引
+    const modeIndex = computed(() => {
+      const map = { chat: 0, agent: 1, aiops: 2, mcp: 3 };
+      return map[chatMode.value] ?? 0;
+    });
+
     // --- 会话 ---
     function newSession() {
       const name = `会话 ${sessions.value.length + 1}`;
@@ -63,6 +69,7 @@ const app = createApp({
     function switchSession(id) {
       currentSessionId.value = id;
       messages.value = loadMessages(id);
+      sidebarCollapsed.value = true;  // 切换后收起侧边栏
     }
 
     function deleteSession(id) {
@@ -236,7 +243,7 @@ const app = createApp({
     // --- AIOps 诊断 ---
     function startAIOps() {
       chatMode.value = 'aiops';
-      messages.value.push({ role: 'user', html: renderMarkdown('🔍 启动系统全面诊断…') });
+      messages.value.push({ role: 'user', html: renderMarkdown('启动系统全面诊断…') });
       scrollBottom();
       loading.value = true;
       runAIOps();
@@ -295,7 +302,7 @@ const app = createApp({
                 msg.aiopsPlan = event.data.new_plan;
                 msg.aiopsResults = {};
                 msg.aiopsCurrent = -1;
-                msg.html = '<em>🔄 计划已调整，继续执行…</em>';
+                msg.html = '<em>计划已调整，继续执行…</em>';
                 scrollBottom();
               } else if (event.type === 'report') {
                 reportBuffer = event.data;
@@ -340,13 +347,13 @@ const app = createApp({
         const data = await res.json();
         messages.value.push({
           role: 'assistant',
-          html: renderMarkdown(`✅ **上传成功** — \`${data.filename}\`，${data.chunks} 个分片已入库。`),
+          html: renderMarkdown(`**上传成功** — \`${data.filename}\`，${data.chunks} 个分片已入库。`),
         });
         scrollBottom();
       } catch (err) {
         messages.value.push({
           role: 'assistant',
-          html: renderMarkdown(`❌ **上传失败** — ${err.message}`),
+          html: renderMarkdown(`**上传失败** — ${err.message}`),
         });
       }
       e.target.value = '';
@@ -359,7 +366,7 @@ const app = createApp({
 
     return {
       sessions, currentSessionId, messages, input, loading,
-      useStream, chatMode, sidebarCollapsed,
+      useStream, chatMode, modeIndex, sidebarCollapsed,
       msgContainer, inputBox,
       newSession, switchSession, deleteSession,
       sendMessage, startAIOps, uploadFile,

@@ -16,4 +16,5 @@ dependencies = [
     "python-multipart>=0.0.9",
     "fastmcp>=3.0.0",
     "langchain-mcp-adapters>=0.2.0",
+    "pymysql>=1.1.0",
 ]

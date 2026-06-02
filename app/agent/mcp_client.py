@@ -21,6 +21,10 @@ MCP_SERVERS = {
         "transport": "streamable-http",
         "url": "http://127.0.0.1:8003/mcp",
     },
+    "db_tool": {
+        "transport": "streamable-http",
+        "url": "http://127.0.0.1:8004/mcp",
+    },
 }
 
 # 重试配置

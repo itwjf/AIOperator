@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_temperature: float = 0.7  # 0=确定性强，0.7=有一定创造性
 
+    # ---- MCP Server 地址 ----
+    # 本地开发用 127.0.0.1，Docker 部署用容器名（mcp-time / mcp-db / mcp-ppt）
+    mcp_time_url: str = "http://127.0.0.1:8003/mcp"
+    mcp_db_url: str = "http://127.0.0.1:8004/mcp"
+    mcp_ppt_url: str = "http://127.0.0.1:8005/mcp"
+
     # ---- Milvus 向量数据库 ----
     milvus_host: str = "127.0.0.1"
     milvus_port: int = 19530

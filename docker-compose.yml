@@ -1,0 +1,129 @@
+# ============================================
+# AIOperator Docker Compose 配置
+#
+# 使用方式：
+#   1. 确保 .env 文件存在（从 .env.example 复制并填写）
+#   2. docker compose up -d          # 后台启动全部服务
+#   3. docker compose logs -f app    # 查看主应用日志
+#   4. docker compose down           # 停止全部服务
+#   5. docker compose down -v        # 停止并删除数据卷
+#
+# 服务列表：
+#   mysql:3306    — MySQL 数据库
+#   milvus:19530  — Milvus 向量数据库
+#   app:9900      — FastAPI 主应用（含前端页面）
+#   mcp-time:8003 — MCP 时间服务
+#   mcp-db:8004   — MCP 数据库服务
+#   mcp-ppt:8005  — MCP PPT 生成服务
+# ============================================
+
+services:
+  # ============================================
+  # 基础设施
+  # ============================================
+
+  mysql:
+    image: mysql:8.0
+    container_name: aioperator-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root123}
+      MYSQL_DATABASE: ${DB_NAME:-aioperator}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-root123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  milvus:
+    image: milvusdb/milvus:v2.4.17
+    container_name: aioperator-milvus
+    restart: unless-stopped
+    command: milvus run standalone
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+      - "9091:9091"       # Milvus 健康检查端口
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ============================================
+  # MCP 服务（独立进程，通过 HTTP 暴露工具）
+  # ============================================
+
+  mcp-time:
+    build: .
+    container_name: aioperator-mcp-time
+    restart: unless-stopped
+    command: python mcp_servers/time_server.py
+    ports:
+      - "8003:8003"
+    env_file: .env
+
+  mcp-db:
+    build: .
+    container_name: aioperator-mcp-db
+    restart: unless-stopped
+    command: python mcp_servers/db_server.py
+    ports:
+      - "8004:8004"
+    env_file: .env
+    environment:
+      - DB_HOST=mysql         # 覆盖本地 127.0.0.1 → Docker 容器名
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mcp-ppt:
+    build: .
+    container_name: aioperator-mcp-ppt
+    restart: unless-stopped
+    command: python mcp_servers/ppt_server.py
+    ports:
+      - "8005:8005"
+    env_file: .env
+
+  # ============================================
+  # 主应用（FastAPI + 前端页面）
+  # ============================================
+
+  app:
+    build: .
+    container_name: aioperator-app
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 9900
+    ports:
+      - "${APP_PORT:-9900}:9900"
+    env_file: .env
+    environment:
+      - MILVUS_HOST=milvus           # 覆盖本地 127.0.0.1 → Docker 容器名
+      - DB_HOST=mysql                # 覆盖本地 127.0.0.1 → Docker 容器名
+      - MCP_TIME_URL=http://mcp-time:8003/mcp
+      - MCP_DB_URL=http://mcp-db:8004/mcp
+      - MCP_PPT_URL=http://mcp-ppt:8005/mcp
+      - APP_HOST=0.0.0.0
+      - DEBUG=false
+    depends_on:
+      milvus:
+        condition: service_healthy
+      mcp-time:
+        condition: service_started
+      mcp-db:
+        condition: service_started
+      mcp-ppt:
+        condition: service_started
+
+volumes:
+  mysql_data:
+  milvus_data:

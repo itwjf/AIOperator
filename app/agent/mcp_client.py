@@ -13,23 +13,25 @@ MCP 客户端管理器 — 连接远程 MCP Server，获取工具列表。
 import asyncio
 import time
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from app.config import settings
 
-# MCP Server 配置
-# 如果 Server 地址变了，只改这里
-MCP_SERVERS = {
-    "time_tool": {
-        "transport": "streamable-http",
-        "url": "http://127.0.0.1:8003/mcp",
-    },
-    "db_tool": {
-        "transport": "streamable-http",
-        "url": "http://127.0.0.1:8004/mcp",
-    },
-    "ppt_tool": {
-        "transport": "streamable-http",
-        "url": "http://127.0.0.1:8005/mcp",
-    },
-}
+
+def _build_mcp_servers():
+    """构建 MCP Server 配置，地址从环境变量读取（支持 Docker 部署）。"""
+    return {
+        "time_tool": {
+            "transport": "streamable-http",
+            "url": settings.mcp_time_url,
+        },
+        "db_tool": {
+            "transport": "streamable-http",
+            "url": settings.mcp_db_url,
+        },
+        "ppt_tool": {
+            "transport": "streamable-http",
+            "url": settings.mcp_ppt_url,
+        },
+    }
 
 # 重试配置
 MAX_RETRIES = 2           # 最大重试次数
@@ -58,7 +60,7 @@ class MCPClientManager:
     def _get_client(self) -> MultiServerMCPClient:
         """延迟创建 MCP 客户端（用到才连，不用不连）。"""
         if self._client is None:
-            self._client = MultiServerMCPClient(MCP_SERVERS)
+            self._client = MultiServerMCPClient(_build_mcp_servers())
         return self._client
 
     def reset(self):

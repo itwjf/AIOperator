@@ -1,0 +1,36 @@
+# ============================================
+# AIOperator Docker 镜像
+# 一个镜像，四个服务：主应用 + 3 个 MCP Server
+# ============================================
+
+FROM python:3.11-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装系统依赖（pymysql 需要 libmysqlclient，python-pptx 需要 libffi）
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 先复制依赖文件，利用 Docker 缓存层（改了代码不会重装依赖）
+COPY pyproject.toml .
+
+# 安装 Python 依赖（自动从 pyproject.toml 读取，无需手动同步）
+RUN python -c "import tomllib; deps = tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']; import subprocess, sys; sys.exit(subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir'] + deps))"
+
+# 复制应用代码
+COPY app/ ./app/
+COPY mcp_servers/ ./mcp_servers/
+COPY static/ ./static/
+
+# 创建输出目录
+RUN mkdir -p /app/output
+
+# 默认暴露主应用端口
+EXPOSE 9900
+
+# 默认启动主应用（可在 docker-compose 中覆盖 command）
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9900"]

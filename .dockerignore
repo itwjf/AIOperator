@@ -1,0 +1,44 @@
+# 环境变量文件（含敏感信息）
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Claude Code
+.claude/
+
+# 日志和输出
+logs/
+*.log
+output/
+debug_tools.log
+
+# 文档
+*.md
+!README.md
+
+# PPT 模板
+*.pptx
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml

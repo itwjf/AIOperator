@@ -1,8 +1,8 @@
-# 🤖 AIOperator — 智能运维助手
+# 🤖 AIOperator — AI 智能助手
 
 <div align="center">
 
-**从零复刻的 LangChain Agent 学习项目 | AIOps 智能诊断 | MCP 协议集成**
+**从零复刻的 LangChain Agent 学习项目 | RAG + Agent + MCP 全栈智能平台**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
@@ -34,11 +34,11 @@
 
 ## 项目简介
 
-**AIOperator** 是一个从零复刻的 **LangChain Agent** 学习项目，定位为 **智能运维助手**。它完整实现了 RAG 检索增强生成、Agent 工具调用、Plan-Execute-Replan 诊断工作流、以及 MCP（Model Context Protocol）远程工具集成。
+**AIOperator** 是一个从零复刻的 **LangChain Agent** 学习项目，定位为 **全能 AI 智能助手**。它完整实现了 RAG 检索增强生成、Agent 工具调用、Plan-Execute-Replan 自动诊断工作流、数据库查询、PPT 生成以及 MCP（Model Context Protocol）远程工具集成。
 
 项目的核心理念是 **"理解底层，不依赖黑盒"**—— 不仅使用 LangChain 的高级封装 `create_agent`，还手动用 `StateGraph` + `ToolNode` + `bind_tools` 搭建了完全等价的 Agent 图，让开发者深入理解 Agent 的运作机制。
 
-> 🎯 **适用场景**: 运维故障诊断、知识库问答、Agent 工作流学习、MCP 协议实践
+> 🎯 **适用场景**: 智能问答、知识库检索、Agent 工作流、自动诊断、MCP 工具集成、PPT 报告生成
 
 ---
 

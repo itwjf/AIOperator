@@ -271,4 +271,4 @@ def get_row_count(table_name: str) -> str:
 
 # 启动入口
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", port=8004, path="/mcp")
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8004, path="/mcp")

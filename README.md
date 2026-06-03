@@ -8,6 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![LangChain](https://img.shields.io/badge/LangChain-0.3+-green.svg)](https://www.langchain.com/)
 [![Milvus](https://img.shields.io/badge/Milvus-2.4+-orange.svg)](https://milvus.io/)
+[![Docker](https://img.shields.io/badge/Docker-✔-2496ED.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -25,6 +26,7 @@
 - [使用场景](#使用场景)
 - [技术栈](#技术栈)
 - [学习路线](#学习路线)
+- [部署指南](#部署指南)
 - [常见问题](#常见问题)
 - [License](#license)
 
@@ -72,9 +74,16 @@ START → Planner（制定计划）→ Executor（执行步骤）→ Replanner�
 - **Reporter**: 综合所有步骤结果，生成结构化 Markdown 诊断报告
 - **保护机制**: 最多执行 5 步，防止死循环
 
-### 🔌 MCP 混合工具
-- **本地工具**: 知识库检索（`retrieve_knowledge`）
-- **远程工具**: 时间服务（`get_current_time`，通过 MCP 协议暴露）
+### 🔌 MCP 混合工具（三合一）
+
+Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透明：
+
+| MCP Server | 端口 | 提供工具 | 说明 |
+|------------|:----:|------|------|
+| **Time Server** | 8003 | `get_current_time` | 时区感知时间查询 |
+| **DB Server** | 8004 | `list_tables`, `describe_table`, `execute_query` | MySQL 只读查询 |
+| **PPT Server** | 8005 | `create_presentation`, `add_content_slide`, `add_table_slide`, `export_pptx` | PowerPoint 生成 |
+
 - **自愈设计**: MCP Server 不可用时，Agent 自动降级为纯本地工具模式
 - **工具透明**: Agent 不关心工具来自本地还是远程 —— MCP 协议的核心价值
 
@@ -87,9 +96,12 @@ START → Planner（制定计划）→ Executor（执行步骤）→ Replanner�
 ### 🖥 Vue 3 交互式前端
 - 四种模式一键切换：对话 / Agent / 诊断 / MCP
 - 诊断计划实时展示，步骤进度可视化
-- 会话管理：创建、切换、删除会话
+- 会话管理：创建、切换、删除，自动生成标题
 - 文件上传：支持拖拽或选择 Markdown/TXT 文件
 - Markdown 渲染 + 代码高亮
+
+### 🐳 Docker 一键部署
+全栈容器化，一条命令拉起所有服务（FastAPI + 3 MCP Server + MySQL + Milvus）。详见 [部署指南](#部署指南)。
 
 ---
 
@@ -123,95 +135,134 @@ START → Planner（制定计划）→ Executor（执行步骤）→ Replanner�
 │                       │                               │
 │  ┌────────────────────┴───────────────────────────┐  │
 │  │              Infrastructure 层                   │  │
-│  │  Milvus │ DashScope(LLM) │ Embedding Service    │  │
+│  │  Milvus │ DashScope(LLM) │ MySQL │ Embedding   │  │
 │  └─────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
 
-┌──────────────────────┐
-│    MCP Server (独立)  │
-│  mcp_servers/        │
-│  time_server.py      │
-│  (FastMCP, Port 8003)│
-└──────────────────────┘
+┌───────────────────────────────────────┐
+│        MCP Servers（独立进程）          │
+│                                       │
+│  time_server  (8003) — 时间服务       │
+│  db_server    (8004) — 数据库服务     │
+│  ppt_server   (8005) — PPT 生成服务   │
+│  (均基于 FastMCP，通过 HTTP 暴露工具)   │
+└───────────────────────────────────────┘
 ```
 
 ---
 
 ## 快速开始
 
-### 环境要求
+### 方式一：Docker 一键部署（推荐）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/itwjf/AIOperator.git
+cd AIOperator
+
+# 2. 配置环境变量（从模板复制，填入真实 API Key）
+cp .env.example .env
+# 编辑 .env，修改 DASHSCOPE_API_KEY 为你的真实 Key
+
+# 3. 一键启动
+docker compose up -d
+
+# 4. 查看状态
+docker compose ps
+
+# 5. 浏览器打开
+# http://localhost:9900
+```
+
+> 📖 详细部署说明、故障排查、生产环境配置请阅读 **[DEPLOY.md](DEPLOY.md)**。
+
+### 方式二：本地开发运行
+
+#### 环境要求
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
 | Python | ≥ 3.11 | 运行环境 |
-| Milvus | ≥ 2.4 | 向量数据库（需单独安装） |
+| MySQL | 8.0 | 关系型数据库（DB MCP Server 需要） |
+| Milvus | ≥ 2.4 | 向量数据库 |
 | DashScope API Key | — | 阿里云百炼平台（LLM + Embedding） |
 
-### 1. 克隆项目
-
-```bash
-git clone https://github.com/itwjf/AIOperator.git
-cd AIOperator
-```
-
-### 2. 安装依赖
+#### 1. 安装依赖
 
 ```bash
 # 推荐使用虚拟环境
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+# Windows
+.venv\Scripts\activate
+# Linux/Mac
+source .venv/bin/activate
 
 pip install -e .
 ```
 
-### 3. 配置环境变量
+#### 2. 配置环境变量
 
-复制 `.env` 文件，填入你的 API Key：
+复制 `.env.example` 为 `.env`，填入 API Key 和数据库连接信息：
 
 ```bash
-# .env
+cp .env.example .env
+```
+
+关键配置项：
+
+```bash
+# LLM（必填）
 DASHSCOPE_API_KEY=sk-your-api-key-here
 LLM_MODEL=qwen-plus
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
+# 向量数据库
 MILVUS_HOST=127.0.0.1
 MILVUS_PORT=19530
-MILVUS_COLLECTION_NAME=aiops_knowledge
-EMBEDDING_MODEL=text-embedding-v4
-EMBEDDING_DIMENSION=1024
+
+# MySQL（DB MCP Server 使用）
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your-password
+DB_NAME=aioperator
 ```
 
 > 💡 **获取 API Key**: 前往 [阿里云百炼平台](https://bailian.console.aliyun.com/) 开通 DashScope 服务。
 
-### 4. 启动 Milvus
+#### 3. 启动基础设施
+
+确保 MySQL 和 Milvus 已运行。如果只有 Milvus：
 
 ```bash
-# 使用 Docker 快速启动（需要先安装 Docker Desktop）
-docker-compose -f vector-database.yml up -d
+docker compose -f vector-database.yml up -d
 ```
 
-### 5. 启动 MCP 时间服务（可选）
+#### 4. 启动服务
+
+**Windows（推荐）**：
+
+双击 `start.bat`，自动启动所有服务（主应用 + 3 个 MCP Server）。
+
+**手动启动**：
 
 ```bash
-# 新开一个终端
+# 终端 1：MCP 时间服务
 python mcp_servers/time_server.py
-# → MCP Server 运行在 http://127.0.0.1:8003/mcp
-```
 
-> 💡 即使不启动 MCP Server，Agent 也能正常使用本地工具，自动降级运行。
+# 终端 2：MCP 数据库服务
+python mcp_servers/db_server.py
 
-### 6. 启动应用
+# 终端 3：MCP PPT 服务
+python mcp_servers/ppt_server.py
 
-```bash
+# 终端 4：主应用
 python app/main.py
-# 或者
-uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
+# 或 uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
 ```
 
-浏览器打开 **http://127.0.0.1:9900** 即可访问前端页面。
+浏览器打开 **http://127.0.0.1:9900**。
 
-### 7. 上传知识库文档
+#### 5. 上传知识库文档
 
 1. 点击侧边栏底部的「📄 上传文档」按钮
 2. 选择 Markdown 或 TXT 文件
@@ -226,13 +277,14 @@ AIOperator/
 ├── app/                           # 应用主目录
 │   ├── main.py                    # FastAPI 入口，路由注册
 │   ├── config.py                  # 全局配置（pydantic-settings）
-│   ├── api/                       # API 路由层（"接客"）
+│   ├── api/                       # API 路由层
 │   │   ├── chat.py                #   /api/chat, /api/chat_stream
 │   │   ├── agent.py               #   /api/agent/chat, /api/agent/chat_stream
 │   │   ├── aiops.py               #   /api/aiops (诊断接口)
 │   │   ├── mcp.py                 #   /api/mcp/chat, /api/mcp/tools
-│   │   └── file.py                #   /api/upload (文件上传)
-│   ├── services/                  # 业务逻辑层（"做事"）
+│   │   ├── file.py                #   /api/upload (文件上传)
+│   │   └── title.py               #   /api/title/summarize (会话标题)
+│   ├── services/                  # 业务逻辑层
 │   │   ├── rag_agent_service.py   #   RAG Agent (create_agent)
 │   │   ├── manual_agent_service.py#   手动 Agent (StateGraph)
 │   │   ├── aiops_service.py       #   Plan-Execute-Replan 工作流
@@ -253,17 +305,26 @@ AIOperator/
 │   └── core/                      # 基础设施
 │       ├── llm_factory.py         #   LLM 工厂
 │       └── milvus_client.py       #   Milvus 连接管理
-├── mcp_servers/                   # MCP 远程服务
-│   └── time_server.py             #   时间服务（FastMCP）
-├── aiops-docs/                    # 上传文档存储目录
+├── mcp_servers/                   # MCP 远程服务（独立进程）
+│   ├── time_server.py             #   时间服务（FastMCP, Port 8003）
+│   ├── db_server.py               #   数据库服务（FastMCP, Port 8004）
+│   ├── ppt_server.py              #   PPT 生成服务（FastMCP, Port 8005）
+│   └── ppt_builder.py             #   PPT 渲染引擎（python-pptx）
 ├── static/                        # 前端静态文件
 │   ├── index.html                 #   Vue 3 单页应用
 │   ├── app.js                     #   应用逻辑
 │   └── styles.css                 #   样式
-├── .env                           # 环境变量（需自行创建）
-├── pyproject.toml                 # 项目依赖
-├── vector-database.yml            # Milvus Docker Compose
-└── README.md                      # 本文件
+├── aiops-docs/                    # 上传文档存储目录
+├── Dockerfile                     # Docker 镜像构建文件
+├── docker-compose.yml             # Docker 全栈编排配置
+├── vector-database.yml            # Milvus 独立部署配置
+├── start.bat                      # Windows 一键启动脚本
+├── .env.example                   # 环境变量模板（可提交 Git）
+├── .env                           # 环境变量（敏感信息，需自行创建）
+├── .dockerignore                  # Docker 构建排除文件
+├── pyproject.toml                 # 项目依赖和元数据
+├── README.md                      # 本文件
+└── DEPLOY.md                      # 部署指南
 ```
 
 ---
@@ -285,7 +346,16 @@ AIOperator/
 | `POST` | `/api/mcp/chat_stream` | MCP 混合工具对话（SSE） | ✅ |
 | `GET` | `/api/mcp/tools` | 列出所有工具 | — |
 | `POST` | `/api/upload` | 上传文档到知识库 | — |
+| `POST` | `/api/title/summarize` | 生成会话标题 | — |
 | `GET` | `/health` | 健康检查 | — |
+
+### MCP Server 端点
+
+| 服务 | 端口 | MCP 端点 | 健康检查 |
+|------|:----:|------|------|
+| Time Server | 8003 | `/mcp` | `/health` |
+| DB Server | 8004 | `/mcp` | `/health` |
+| PPT Server | 8005 | `/mcp` | `/health` |
 
 ### SSE 事件类型
 
@@ -340,8 +410,17 @@ curl -X POST http://127.0.0.1:9900/api/aiops \
 ```bash
 curl -X POST http://127.0.0.1:9900/api/mcp/chat \
   -H "Content-Type: application/json" \
-  -d '{"question": "现在几点？顺便帮我查一下 Redis 内存满的处理方案"}'
-# Agent 自动判断：时间 → MCP 远程工具，知识库 → 本地工具
+  -d '{"question": "现在几点？数据库中都有哪些表？顺便帮我查一下 CPU 过高怎么处理"}'
+# Agent 自动判断：时间 → MCP Time Server，数据库 → MCP DB Server，知识库 → 本地工具
+```
+
+### 场景四：生成 PPT 报告
+
+```bash
+curl -X POST http://127.0.0.1:9900/api/mcp/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "根据数据库查询结果，生成一份 PPT 报告"}'
+# Agent 调用 MCP PPT Server 自动创建演示文稿
 ```
 
 ---
@@ -353,12 +432,15 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 | **Web 框架** | FastAPI + Uvicorn | HTTP API + SSE 流式响应 |
 | **LLM** | 通义千问 (Qwen-Plus) via DashScope | 对话生成、计划制定、报告生成 |
 | **Agent 框架** | LangChain + LangGraph | Agent 编排、状态图、工具调用 |
-| **向量数据库** | Milvus | 文档片段存储 + 语义检索 |
+| **向量数据库** | Milvus 2.4 | 文档片段存储 + 语义检索 |
+| **关系数据库** | MySQL 8.0 | DB MCP Server 数据源 |
 | **Embedding** | text-embedding-v4 (DashScope) | 文本向量化 |
 | **MCP 协议** | FastMCP + langchain-mcp-adapters | 远程工具服务 + 客户端适配 |
+| **PPT 生成** | python-pptx | PowerPoint 文件创建和渲染 |
 | **前端** | Vue 3 (CDN) + marked.js + highlight.js | SPA 交互界面 |
 | **配置管理** | pydantic-settings | 类型安全的配置加载 |
 | **日志** | loguru | 结构化日志 |
+| **容器化** | Docker + Docker Compose | 一键部署、环境隔离 |
 
 ---
 
@@ -374,7 +456,15 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 | 4 | **RAG Agent** | `rag_agent_service.py` | `create_agent`、MemorySaver、工具注册 |
 | 5 | **手动 Agent** | `manual_agent_service.py` | `StateGraph`、`ToolNode`、`bind_tools` |
 | 6 | **AIOps 诊断** | `aiops_service.py`, `planner.py`, `executor.py`, `replanner.py` | Plan-Execute-Replan、`with_structured_output` |
-| 7 | **MCP 协议** | `mcp_client.py`, `time_server.py` | FastMCP、MultiServerMCPClient、自愈设计 |
+| 7 | **MCP 协议** | `mcp_client.py`, `mcp_servers/` | FastMCP、MultiServerMCPClient、自愈设计 |
+
+---
+
+## 部署指南
+
+- **Docker 全栈部署**：[DEPLOY.md](DEPLOY.md) — 推荐方式，包含服务编排、环境变量、故障排查
+- **本地开发**：见 [快速开始 - 方式二](#方式二本地开发运行)
+- **Windows 快速启动**：双击 `start.bat`（会自动启动主应用和所有 MCP Server）
 
 ---
 
@@ -407,6 +497,12 @@ DashScope 提供了 OpenAI 兼容接口，`ChatOpenAI` 可以直接对接。这�
 </details>
 
 <details>
+<summary><b>Q: Docker 部署时数据库和 MCP 地址需要改吗？</b></summary>
+
+不需要。`docker-compose.yml` 已通过 `environment` 自动覆盖 `127.0.0.1` 为容器名（`mysql`、`mcp-time` 等）。你只需在 `.env` 中填写 API Key 即可。
+</details>
+
+<details>
 <summary><b>Q: 为什么 MemorySaver 用内存存储？</b></summary>
 
 学习阶段使用 `MemorySaver`（内存存储）是为了降低复杂度。**生产环境应替换为 `SqliteSaver` 或 `PostgresSaver`**，以保证服务重启后对话历史不丢失。
@@ -431,6 +527,12 @@ DASHSCOPE_API_KEY=sk-your-deepseek-key
 ```
 
 `ChatOpenAI` 兼容所有 OpenAI 接口规范的 API。
+</details>
+
+<details>
+<summary><b>Q: Windows 双击 start.bat 报错怎么办？</b></summary>
+
+这是编码问题。需要用 **ANSI/GBK 编码**重新保存 `start.bat`（VS Code 右下角 → 编码 → 通过编码保存 → GBK），并删除 `chcp 65001` 行。
 </details>
 
 ---

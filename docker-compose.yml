@@ -46,6 +46,9 @@ services:
     container_name: aioperator-milvus
     restart: unless-stopped
     command: milvus run standalone
+    environment:
+      - ETCD_USE_EMBED=true              # 强制内嵌 etcd，解决 standalone 未自动启用的 bug
+      - COMMON_STORAGETYPE=local         # 使用本地存储
     ports:
       - "${MILVUS_PORT:-19530}:19530"
       - "9091:9091"       # Milvus 健康检查端口
@@ -56,7 +59,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 60s
+      start_period: 90s
 
   # ============================================
   # MCP 服务（独立进程，通过 HTTP 暴露工具）

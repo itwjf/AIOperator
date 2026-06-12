@@ -21,6 +21,7 @@ from pymilvus import (
 )
 
 from app.config import settings
+from app.core.exceptions import VectorDBError
 
 
 # 全局单例 — 整个应用只有一个 Milvus 客户端连接
@@ -35,9 +36,12 @@ def get_milvus_client() -> MilvusClient:
     """
     global _client
     if _client is None:
-        _client = MilvusClient(
-            uri=f"http://{settings.milvus_host}:{settings.milvus_port}"
-        )
+        try:
+            _client = MilvusClient(
+                uri=f"http://{settings.milvus_host}:{settings.milvus_port}"
+            )
+        except Exception as e:
+            raise VectorDBError(detail=f"无法连接到 Milvus: {e}") from e
     return _client
 
 
@@ -60,22 +64,27 @@ def ensure_collection() -> None:
     生产环境应该在这里创建索引（IVF_FLAT / HNSW），
     学习阶段数据量小，用默认索引就够了。
     """
-    client = get_milvus_client()
-    collection_name = settings.milvus_collection_name
+    try:
+        client = get_milvus_client()
+        collection_name = settings.milvus_collection_name
 
-    if client.has_collection(collection_name):
-        return  # Collection 已存在，不需要重复创建
+        if client.has_collection(collection_name):
+            return  # Collection 已存在，不需要重复创建
 
-    # 创建 Collection，同时定义 Schema
-    client.create_collection(
-        collection_name=collection_name,
-        dimension=settings.embedding_dimension,
-        metric_type="IP",  # IP = Inner Product（内积），即余弦相似度（向量已归一化时）
-        primary_field_name="id",
-        id_type=DataType.VARCHAR,
-        max_length=256,
-        vector_field_name="vector",
-    )
+        # 创建 Collection，同时定义 Schema
+        client.create_collection(
+            collection_name=collection_name,
+            dimension=settings.embedding_dimension,
+            metric_type="IP",  # IP = Inner Product（内积），即余弦相似度（向量已归一化时）
+            primary_field_name="id",
+            id_type=DataType.VARCHAR,
+            max_length=256,
+            vector_field_name="vector",
+        )
+    except VectorDBError:
+        raise  # 已经是 VectorDBError，直接抛出
+    except Exception as e:
+        raise VectorDBError(detail=f"Collection 操作失败: {e}") from e
 
 
 def drop_collection() -> None:

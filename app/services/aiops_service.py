@@ -49,6 +49,7 @@ from app.agent.aiops.planner import run_planner
 from app.agent.aiops.executor import run_executor
 from app.agent.aiops.replanner import run_replanner
 from app.core.llm_factory import create_llm
+from app.core.exceptions import AIOperatorException
 
 # === 全局单例 ===
 _graph = None
@@ -237,5 +238,7 @@ async def diagnose(session_id: str = "default"):
 
         yield {"type": "done"}
 
+    except AIOperatorException as e:
+        yield {"type": "error", "data": e.message}
     except Exception as e:
-        yield {"type": "error", "data": str(e)}
+        yield {"type": "error", "data": f"诊断服务暂时不可用，请稍后重试（详情: {e}）"}

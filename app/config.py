@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-v4"  # DashScope 的向量化模型
     embedding_dimension: int = 1024  # text-embedding-v4 输出 1024 维
 
+    # ---- 消息修剪 ----
+    # 对话历史超过此数量时自动截断，防止超出 LLM token 限制
+    max_chat_messages: int = 20
+
     # 告诉 pydantic-settings 去读 .env 文件
     # env_file 找不到不会报错（比如生产环境用真正的环境变量）
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}

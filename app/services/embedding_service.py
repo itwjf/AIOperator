@@ -17,6 +17,7 @@ Embedding 服务 — 把文本转换成数值向量。
 import asyncio
 from openai import AsyncOpenAI
 from app.config import settings
+from app.core.exceptions import EmbeddingServiceError
 
 
 # 全局单例 — 复用同一个 HTTP 客户端（内部管理连接池）
@@ -56,14 +57,17 @@ async def embed_documents(texts: list[str]) -> list[list[float]]:
     client = _get_client()
     all_embeddings: list[list[float]] = []
 
-    # 按 BATCH_SIZE 分批调用
-    for i in range(0, len(texts), _BATCH_SIZE):
-        batch = texts[i : i + _BATCH_SIZE]
-        response = await client.embeddings.create(
-            model=settings.embedding_model,
-            input=batch,
-        )
-        all_embeddings.extend([item.embedding for item in response.data])
+    try:
+        # 按 BATCH_SIZE 分批调用
+        for i in range(0, len(texts), _BATCH_SIZE):
+            batch = texts[i : i + _BATCH_SIZE]
+            response = await client.embeddings.create(
+                model=settings.embedding_model,
+                input=batch,
+            )
+            all_embeddings.extend([item.embedding for item in response.data])
+    except Exception as e:
+        raise EmbeddingServiceError(detail=str(e)) from e
 
     return all_embeddings
 
@@ -86,8 +90,11 @@ async def embed_query(text: str) -> list[float]:
         return []
 
     client = _get_client()
-    response = await client.embeddings.create(
-        model=settings.embedding_model,
-        input=[text],  # API 要求 input 是 list，传单条也要用 list 包一下
-    )
+    try:
+        response = await client.embeddings.create(
+            model=settings.embedding_model,
+            input=[text],  # API 要求 input 是 list，传单条也要用 list 包一下
+        )
+    except Exception as e:
+        raise EmbeddingServiceError(detail=str(e)) from e
     return response.data[0].embedding

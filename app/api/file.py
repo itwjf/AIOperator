@@ -10,6 +10,12 @@ import os
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services.document_splitter import MarkdownSplitter
 from app.services.vector_store_manager import add_documents, delete_by_source
+from app.core.exceptions import (
+    AIOperatorException,
+    DocumentProcessError,
+    VectorDBError,
+    EmbeddingServiceError,
+)
 
 router = APIRouter(prefix="/api", tags=["file"])
 
@@ -42,29 +48,40 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"不支持的文件类型 {ext}，仅支持 {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
-    # 保存到磁盘
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    try:
+        # 保存到磁盘
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
 
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
 
-    # 路径统一用 / — Windows 的 \ 在 Milvus JSON 表达式中会被误解为转义字符
-    normalized_path = file_path.replace("\\", "/")
+        # 路径统一用 / — Windows 的 \ 在 Milvus JSON 表达式中会被误解为转义字符
+        normalized_path = file_path.replace("\\", "/")
 
-    # 删旧 → 分割 → 入库
-    await delete_by_source(normalized_path)
-    splitter = MarkdownSplitter(chunk_size=800, chunk_overlap=100)
-    chunks = splitter.split_file(file_path)
-    # 把 source 统一为 / 分隔，保证后续查询能匹配
-    for chunk in chunks:
-        chunk.metadata["source"] = chunk.metadata["source"].replace("\\", "/")
-    count = await add_documents(chunks)
+        # 删旧 → 分割 → 入库
+        await delete_by_source(normalized_path)
+        splitter = MarkdownSplitter(chunk_size=800, chunk_overlap=100)
+        chunks = splitter.split_file(file_path)
+        # 把 source 统一为 / 分隔，保证后续查询能匹配
+        for chunk in chunks:
+            chunk.metadata["source"] = chunk.metadata["source"].replace("\\", "/")
+        count = await add_documents(chunks)
 
-    return {
-        "filename": file.filename,
-        "size_bytes": len(content),
-        "chunks": count,
-        "status": "ok",
-    }
+        return {
+            "filename": file.filename,
+            "size_bytes": len(content),
+            "chunks": count,
+            "status": "ok",
+        }
+    except DocumentProcessError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except (VectorDBError, EmbeddingServiceError) as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except AIOperatorException as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"文件保存失败: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"上传处理失败: {e}")

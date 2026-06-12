@@ -15,6 +15,7 @@ from app.core.milvus_client import get_milvus_client, ensure_collection
 from app.services.embedding_service import embed_documents, embed_query
 from app.services.document_splitter import Document
 from app.config import settings
+from app.core.exceptions import VectorDBError, EmbeddingServiceError
 
 
 async def add_documents(docs: list[Document]) -> int:
@@ -27,30 +28,35 @@ async def add_documents(docs: list[Document]) -> int:
     if not docs:
         return 0
 
-    ensure_collection()
-    client = get_milvus_client()
+    try:
+        ensure_collection()
+        client = get_milvus_client()
 
-    # 提取所有文本
-    texts = [doc.page_content for doc in docs]
+        # 提取所有文本
+        texts = [doc.page_content for doc in docs]
 
-    # 批量向量化
-    vectors = await embed_documents(texts)
+        # 批量向量化
+        vectors = await embed_documents(texts)
 
-    # 构造 Milvus 插入数据
-    data = []
-    for doc, vector in zip(docs, vectors):
-        data.append({
-            "id": doc.id,
-            "vector": vector,
-            "content": doc.page_content,
-            "metadata": doc.metadata,
-        })
+        # 构造 Milvus 插入数据
+        data = []
+        for doc, vector in zip(docs, vectors):
+            data.append({
+                "id": doc.id,
+                "vector": vector,
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+            })
 
-    result = client.insert(
-        collection_name=settings.milvus_collection_name,
-        data=data,
-    )
-    return result["insert_count"]
+        result = client.insert(
+            collection_name=settings.milvus_collection_name,
+            data=data,
+        )
+        return result["insert_count"]
+    except (VectorDBError, EmbeddingServiceError):
+        raise  # 已经是应用异常，直接向上抛
+    except Exception as e:
+        raise VectorDBError(detail=f"文档入库失败: {e}") from e
 
 
 async def similarity_search(
@@ -72,31 +78,36 @@ async def similarity_search(
         ...
     ]
     """
-    ensure_collection()
-    client = get_milvus_client()
+    try:
+        ensure_collection()
+        client = get_milvus_client()
 
-    # 查询向量化
-    query_vector = await embed_query(query)
+        # 查询向量化
+        query_vector = await embed_query(query)
 
-    # Milvus 搜索
-    results = client.search(
-        collection_name=settings.milvus_collection_name,
-        data=[query_vector],
-        limit=k,
-        output_fields=["content", "metadata"],
-    )
+        # Milvus 搜索
+        results = client.search(
+            collection_name=settings.milvus_collection_name,
+            data=[query_vector],
+            limit=k,
+            output_fields=["content", "metadata"],
+        )
 
-    # 格式化结果
-    formatted = []
-    for hit in results[0]:  # results[0] 是第一个（也是唯一一个）查询向量的结果
-        formatted.append({
-            "content": hit["entity"]["content"],
-            "source": hit["entity"]["metadata"].get("source", ""),
-            "title": hit["entity"]["metadata"].get("title", ""),
-            "score": hit["distance"],  # Milvus 返回的相似度分数
-        })
+        # 格式化结果
+        formatted = []
+        for hit in results[0]:  # results[0] 是第一个（也是唯一一个）查询向量的结果
+            formatted.append({
+                "content": hit["entity"]["content"],
+                "source": hit["entity"]["metadata"].get("source", ""),
+                "title": hit["entity"]["metadata"].get("title", ""),
+                "score": hit["distance"],  # Milvus 返回的相似度分数
+            })
 
-    return formatted
+        return formatted
+    except (VectorDBError, EmbeddingServiceError):
+        raise
+    except Exception as e:
+        raise VectorDBError(detail=f"语义搜索失败: {e}") from e
 
 
 async def delete_by_source(file_path: str) -> int:
@@ -104,24 +115,29 @@ async def delete_by_source(file_path: str) -> int:
 
     用途：用户重新上传同名文件时，先删旧数据再入库。
     """
-    ensure_collection()
-    client = get_milvus_client()
+    try:
+        ensure_collection()
+        client = get_milvus_client()
 
-    # 用 JSON 字段过滤：metadata 中的 source 字段匹配
-    # Windows 路径的 \ 会被 Milvus 表达式解析器误解为转义字符，统一转成 /
-    normalized_path = file_path.replace("\\", "/")
-    results = client.query(
-        collection_name=settings.milvus_collection_name,
-        filter=f'metadata["source"] == "{normalized_path}"',
-        output_fields=["id"],
-    )
+        # 用 JSON 字段过滤：metadata 中的 source 字段匹配
+        # Windows 路径的 \ 会被 Milvus 表达式解析器误解为转义字符，统一转成 /
+        normalized_path = file_path.replace("\\", "/")
+        results = client.query(
+            collection_name=settings.milvus_collection_name,
+            filter=f'metadata["source"] == "{normalized_path}"',
+            output_fields=["id"],
+        )
 
-    if not results:
-        return 0
+        if not results:
+            return 0
 
-    ids = [r["id"] for r in results]
-    client.delete(
-        collection_name=settings.milvus_collection_name,
-        ids=ids,
-    )
-    return len(ids)
+        ids = [r["id"] for r in results]
+        client.delete(
+            collection_name=settings.milvus_collection_name,
+            ids=ids,
+        )
+        return len(ids)
+    except VectorDBError:
+        raise
+    except Exception as e:
+        raise VectorDBError(detail=f"按来源删除失败: {e}") from e

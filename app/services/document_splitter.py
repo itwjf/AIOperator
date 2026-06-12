@@ -22,6 +22,8 @@ import re
 import uuid
 from dataclasses import dataclass, field
 
+from app.core.exceptions import DocumentProcessError
+
 
 @dataclass
 class Document:
@@ -49,8 +51,17 @@ class MarkdownSplitter:
 
     def split_file(self, file_path: str) -> list[Document]:
         """读取文件并分割为 chunk 列表。"""
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except FileNotFoundError as e:
+            raise DocumentProcessError(detail=f"文件不存在: {file_path}") from e
+        except PermissionError as e:
+            raise DocumentProcessError(detail=f"没有权限读取文件: {file_path}") from e
+        except UnicodeDecodeError as e:
+            raise DocumentProcessError(detail=f"文件编码不支持，请使用 UTF-8 编码: {file_path}") from e
+        except OSError as e:
+            raise DocumentProcessError(detail=f"文件读取失败: {e}") from e
         return self.split_text(content, source=file_path)
 
     def split_text(self, text: str, source: str = "") -> list[Document]:

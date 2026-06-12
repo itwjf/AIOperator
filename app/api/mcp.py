@@ -12,11 +12,12 @@ MCP API — 展示 MCP 远程工具 + 本地工具的协作。
 """
 
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.chat import ChatRequest
 from app.services.mcp_agent_service import chat, chat_stream, get_all_tools_info
+from app.core.exceptions import AIOperatorException
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
@@ -30,8 +31,13 @@ async def list_tools():
 @router.post("/chat")
 async def mcp_chat(req: ChatRequest):
     """非流式对话 — 使用本地 + MCP 远程工具。"""
-    answer = await chat(req.question, req.session_id)
-    return {"answer": answer}
+    try:
+        answer = await chat(req.question, req.session_id)
+        return {"answer": answer}
+    except AIOperatorException as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MCP 服务异常: {e}")
 
 
 @router.post("/chat_stream")

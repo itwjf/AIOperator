@@ -9,15 +9,44 @@ MCP Agent 服务 — 混合本地工具和 MCP 远程工具的 Agent。
 自愈设计：
   如果 MCP Server 没启动，Agent 也能正常工作，
   只是少了一个远程工具。Agent 会在回答中诚实告知。
+
+消息修剪：
+  通过 AgentMiddleware 在每次 LLM 调用前自动截断对话历史，
+  防止超出 token 限制。
 """
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 
 from app.core.llm_factory import create_llm
+from app.core.message_trimmer import trim_conversation_history
+from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.agent.mcp_client import get_mcp_client
+from app.config import settings
+
+
+# === Message Trimmer Middleware ===
+# 在每次 LLM 调用前自动修剪消息历史，防止超出 token 限制。
+
+
+class MessageTrimmerMiddleware(AgentMiddleware):
+    """Agent 中间件：在每次模型调用前自动修剪消息历史。"""
+
+    def __init__(self, max_messages: int = 20):
+        super().__init__()
+        self.max_messages = max_messages
+
+    async def awrap_model_call(self, request, handler):
+        """拦截模型调用，修剪消息后交给 handler 执行。"""
+        if len(request.messages) > self.max_messages:
+            trimmed = trim_conversation_history(
+                list(request.messages), self.max_messages
+            )
+            request = request.override(messages=trimmed)
+        return await handler(request)
 
 
 # === System Prompt ===
@@ -114,18 +143,24 @@ async def _get_agent():
             tools=all_tools,
             checkpointer=_get_memory(),
             system_prompt=SYSTEM_PROMPT,
+            middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )
     return _agent
 
 
 async def chat(question: str, session_id: str = "default") -> str:
     """非流式对话 — MCP + 本地工具。"""
-    agent = await _get_agent()
-    result = await agent.ainvoke(
-        {"messages": [HumanMessage(content=question)]},
-        config={"configurable": {"thread_id": session_id}},
-    )
-    return result["messages"][-1].content
+    try:
+        agent = await _get_agent()
+        result = await agent.ainvoke(
+            {"messages": [HumanMessage(content=question)]},
+            config={"configurable": {"thread_id": session_id}},
+        )
+        return result["messages"][-1].content
+    except AIOperatorException as e:
+        return f"❌ {e.message}"
+    except Exception as e:
+        return f"❌ 服务暂时不可用，请稍后重试（详情: {e}）"
 
 
 async def chat_stream(question: str, session_id: str = "default"):
@@ -155,5 +190,7 @@ async def chat_stream(question: str, session_id: str = "default"):
 
         yield {"type": "done"}
 
+    except AIOperatorException as e:
+        yield {"type": "error", "data": e.message}
     except Exception as e:
-        yield {"type": "error", "data": str(e)}
+        yield {"type": "error", "data": f"服务暂时不可用，请稍后重试（详情: {e}）"}

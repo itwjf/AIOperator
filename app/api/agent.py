@@ -9,11 +9,12 @@ Agent API — 使用手动搭建的 Agent 图（非 create_agent）。
 """
 
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.chat import ChatRequest  # 复用同一个请求模型
 from app.services.manual_agent_service import chat, chat_stream
+from app.core.exceptions import AIOperatorException
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -25,8 +26,13 @@ async def agent_chat(req: ChatRequest):
     内部用 StateGraph + ToolNode + bind_tools 实现，
     和 create_agent 功能等价但结构透明。
     """
-    answer = await chat(req.question, req.session_id)
-    return {"answer": answer}
+    try:
+        answer = await chat(req.question, req.session_id)
+        return {"answer": answer}
+    except AIOperatorException as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent 服务异常: {e}")
 
 
 @router.post("/chat_stream")

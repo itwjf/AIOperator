@@ -14,11 +14,12 @@
 """
 
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.services.rag_agent_service import query, query_stream
+from app.core.exceptions import AIOperatorException
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -44,8 +45,13 @@ async def chat(req: ChatRequest):
                      不需要？→ 直接回答
         → 返回 {"answer": "完整回答文本"}
     """
-    answer = await query(req.question, req.session_id)
-    return {"answer": answer}
+    try:
+        answer = await query(req.question, req.session_id)
+        return {"answer": answer}
+    except AIOperatorException as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"对话服务异常: {e}")
 
 
 # === /chat_stream — SSE 流式对话（RAG Agent）===

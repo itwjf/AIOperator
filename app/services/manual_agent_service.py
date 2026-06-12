@@ -8,6 +8,11 @@
 
 理解了这个文件，你就理解了 LangGraph Agent 的底层原理。
 
+消息修剪：
+  在 call_model 中，每次发给 LLM 前修剪对话历史。
+  注意：只修剪发送给 LLM 的消息副本，StateGraph 的 state 仍保留完整历史
+  （完整历史保存在 checkpointer 中，用于调试和审计）。
+
 图的拓扑结构：
 
     START
@@ -33,8 +38,11 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from app.core.llm_factory import create_llm
+from app.core.message_trimmer import trim_conversation_history
+from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.time_tool import get_current_time
+from app.config import settings
 
 # === 全局工具清单 ===
 TOOLS = [retrieve_knowledge, get_current_time]
@@ -107,9 +115,18 @@ def _build_graph():
         LLM 的响应可能有两种：
           - AIMessage(content="...")              → 纯文本回答，对话结束
           - AIMessage(tool_calls=[...])           → 要求调工具，继续循环
+
+        消息修剪：
+          发送给 LLM 前裁掉过期消息，防止超出 token 限制。
+          StateGraph 的 state 保留完整历史（不修改），
+          本次推理只使用最近 N 条消息的副本。
         """
-        # 在消息前插入 system_prompt（不修改 state，只在本次推理时用）
+        # 在消息前插入 system_prompt
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+
+        # 消息修剪：只保留最近 max_chat_messages 条（不含 system_prompt）
+        messages = trim_conversation_history(messages, settings.max_chat_messages)
+
         response = await llm_with_tools.ainvoke(messages)
         return {"messages": [response]}
 
@@ -163,12 +180,17 @@ async def chat(question: str, session_id: str = "default") -> str:
         → agent 节点 → LLM 可能多次调工具 → 循环
         → 最终返回完整消息列表
     """
-    graph = _get_graph()
-    result = await graph.ainvoke(
-        {"messages": [HumanMessage(content=question)]},
-        config={"configurable": {"thread_id": session_id}},
-    )
-    return result["messages"][-1].content
+    try:
+        graph = _get_graph()
+        result = await graph.ainvoke(
+            {"messages": [HumanMessage(content=question)]},
+            config={"configurable": {"thread_id": session_id}},
+        )
+        return result["messages"][-1].content
+    except AIOperatorException as e:
+        return f"❌ {e.message}"
+    except Exception as e:
+        return f"❌ 服务暂时不可用，请稍后重试（详情: {e}）"
 
 
 async def chat_stream(question: str, session_id: str = "default"):
@@ -204,5 +226,7 @@ async def chat_stream(question: str, session_id: str = "default"):
 
         yield {"type": "done"}
 
+    except AIOperatorException as e:
+        yield {"type": "error", "data": e.message}
     except Exception as e:
-        yield {"type": "error", "data": str(e)}
+        yield {"type": "error", "data": f"服务暂时不可用，请稍后重试（详情: {e}）"}

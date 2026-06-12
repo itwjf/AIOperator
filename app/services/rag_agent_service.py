@@ -10,20 +10,46 @@ RAG Agent 服务 — 将检索工具 + LLM + 记忆组合成一个能自动查�
 技术实现：
   - LangChain create_agent：自动处理「规划 → 调工具 → 拿结果 → 回答」循环
   - LangGraph MemorySaver：持久化对话历史，用 thread_id 区分会话
-  - 消息修剪：防止对话历史超出 token 限制
+  - 消息修剪：通过 AgentMiddleware 在每次 LLM 调用前自动截断，防止爆 token
 """
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 
 from app.core.llm_factory import create_llm
+from app.core.message_trimmer import trim_conversation_history
+from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
+from app.config import settings
 
 
 # 全局单例
 _agent = None
 _memory: MemorySaver | None = None
+
+
+# === Message Trimmer Middleware ===
+# 在每次 LLM 调用前自动修剪消息历史，防止超出 token 限制。
+# AgentMiddleware.awrap_model_call 可以拦截并修改发往 LLM 的消息列表。
+
+
+class MessageTrimmerMiddleware(AgentMiddleware):
+    """Agent 中间件：在每次模型调用前自动修剪消息历史。"""
+
+    def __init__(self, max_messages: int = 20):
+        super().__init__()
+        self.max_messages = max_messages
+
+    async def awrap_model_call(self, request, handler):
+        """拦截模型调用，修剪消息后交给 handler 执行。"""
+        if len(request.messages) > self.max_messages:
+            trimmed = trim_conversation_history(
+                list(request.messages), self.max_messages
+            )
+            request = request.override(messages=trimmed)
+        return await handler(request)
 
 
 # === System Prompt ===
@@ -81,6 +107,7 @@ def _get_agent():
             tools=[retrieve_knowledge], # 工具列表
             checkpointer=_get_memory(), # 记忆（会话持久化）
             system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
+            middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )
     return _agent
 
@@ -101,16 +128,21 @@ async def query(question: str, session_id: str = "default") -> str:
     返回：
         Agent 的最终回答文本
     """
-    agent = _get_agent()
-    result = await agent.ainvoke(
-        {"messages": [HumanMessage(content=question)]},
-        config={"configurable": {"thread_id": session_id}},
-    )
+    try:
+        agent = _get_agent()
+        result = await agent.ainvoke(
+            {"messages": [HumanMessage(content=question)]},
+            config={"configurable": {"thread_id": session_id}},
+        )
 
-    # result["messages"] 是完整的消息历史
-    # 最后一条 AI 消息就是 Agent 的最终回答
-    last_message = result["messages"][-1]
-    return last_message.content
+        # result["messages"] 是完整的消息历史
+        # 最后一条 AI 消息就是 Agent 的最终回答
+        last_message = result["messages"][-1]
+        return last_message.content
+    except AIOperatorException as e:
+        return f"❌ {e.message}"
+    except Exception as e:
+        return f"❌ 服务暂时不可用，请稍后重试（详情: {e}）"
 
 
 async def query_stream(question: str, session_id: str = "default"):
@@ -155,5 +187,7 @@ async def query_stream(question: str, session_id: str = "default"):
 
         yield {"type": "done"}
 
+    except AIOperatorException as e:
+        yield {"type": "error", "data": e.message}
     except Exception as e:
-        yield {"type": "error", "data": str(e)}
+        yield {"type": "error", "data": f"服务暂时不可用，请稍后重试（详情: {e}）"}

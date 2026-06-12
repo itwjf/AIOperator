@@ -10,6 +10,7 @@ import os
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services.document_splitter import MarkdownSplitter
 from app.services.vector_store_manager import add_documents, delete_by_source
+from app.core.logger import logger
 from app.core.exceptions import (
     AIOperatorException,
     DocumentProcessError,
@@ -48,6 +49,8 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"不支持的文件类型 {ext}，仅支持 {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
+    logger.info("收到文件上传: {} ({} 字节)", file.filename, file.size or "未知")
+
     try:
         # 保存到磁盘
         os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -69,6 +72,7 @@ async def upload_file(file: UploadFile = File(...)):
             chunk.metadata["source"] = chunk.metadata["source"].replace("\\", "/")
         count = await add_documents(chunks)
 
+        logger.info("文件入库成功: {} → {} 个分片", file.filename, count)
         return {
             "filename": file.filename,
             "size_bytes": len(content),

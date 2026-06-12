@@ -21,6 +21,7 @@ from langchain_core.messages import HumanMessage
 from app.core.llm_factory import create_llm
 from app.core.message_trimmer import trim_conversation_history
 from app.core.exceptions import AIOperatorException
+from app.core.logger import logger
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.config import settings
 
@@ -109,6 +110,8 @@ def _get_agent():
             system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )
+        logger.info("RAG Agent 初始化完成 — 模型: {}, 消息上限: {}",
+                     settings.llm_model, settings.max_chat_messages)
     return _agent
 
 

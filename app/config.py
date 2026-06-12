@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # 对话历史超过此数量时自动截断，防止超出 LLM token 限制
     max_chat_messages: int = 20
 
+    # ---- 日志配置 ----
+    log_level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
+    log_dir: str = "logs"    # 日志文件目录
+
     # 告诉 pydantic-settings 去读 .env 文件
     # env_file 找不到不会报错（比如生产环境用真正的环境变量）
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}

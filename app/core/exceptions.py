@@ -5,7 +5,13 @@
   基础设施层（embedding, milvus）→ re-raise as AppException
   服务层（rag_agent, manual_agent）→ catch AppException → 返回友好消息
   API 层（FastAPI route）→ catch AppException → 返回 HTTP 错误响应
+
+日志集成：
+  每个异常在创建时会自动把 detail（技术细节）写入日志，
+  确保排查问题时有关键信息，同时 message（友好提示）展示给用户。
 """
+
+from app.core.logger import logger
 
 
 class AIOperatorException(Exception):
@@ -14,11 +20,17 @@ class AIOperatorException(Exception):
     每个子类都有两个信息：
       - message: 给用户看的友好提示
       - detail:  给开发者看的原始错误（用于日志排查）
+
+    __init__ 时自动把 detail 写入 loguru 日志，
+    这样开发者排查问题时不用四处找原始的异常堆栈。
     """
 
     def __init__(self, message: str, detail: str = ""):
         self.message = message
         self.detail = detail
+        # 自动记录技术细节到日志
+        if detail:
+            logger.error("{} | 详情: {}", self.__class__.__name__, detail)
         super().__init__(message)
 
     def __str__(self):

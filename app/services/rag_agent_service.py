@@ -23,6 +23,7 @@ from app.core.message_trimmer import trim_conversation_history
 from app.core.exceptions import AIOperatorException
 from app.core.logger import logger
 from app.tools.knowledge_tool import retrieve_knowledge
+from app.tools.calculator_tool import calculate
 from app.config import settings
 
 
@@ -105,7 +106,7 @@ def _get_agent():
                 # 例如，用户问了一个技术问题，Agent 会判断需要查知识库，就自动调用 retrieve_knowledge 工具，拿到文档后再生成回答。
         _agent = create_agent(
             llm,                        # 语言模型
-            tools=[retrieve_knowledge], # 工具列表
+            tools=[retrieve_knowledge, calculate], # 工具列表
             checkpointer=_get_memory(), # 记忆（会话持久化）
             system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],

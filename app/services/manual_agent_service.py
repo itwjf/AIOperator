@@ -42,10 +42,11 @@ from app.core.message_trimmer import trim_conversation_history
 from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.time_tool import get_current_time
+from app.tools.calculator_tool import calculate
 from app.config import settings
 
 # === 全局工具清单 ===
-TOOLS = [retrieve_knowledge, get_current_time]
+TOOLS = [retrieve_knowledge, get_current_time, calculate]
 
 # === System Prompt ===
 SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
@@ -56,7 +57,11 @@ SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
 2. **时间查询**（get_current_time 工具）：
    当用户问「现在几点」「当前时间」或需要时间信息做判断时使用。
 
-3. **通用对话**：
+3. **数值计算**（calculate 工具）：
+   当用户需要精确计算、单位换算、时间戳转换时使用。
+   如「xx 字节是多少 GB」「sqrt(144) 等于多少」。
+
+4. **通用对话**：
    对于不涉及以上工具的日常闲聊，直接回答。
 
 重要规则：

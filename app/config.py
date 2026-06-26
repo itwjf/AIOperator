@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     mcp_time_url: str = "http://127.0.0.1:8003/mcp"
     mcp_db_url: str = "http://127.0.0.1:8004/mcp"
     mcp_ppt_url: str = "http://127.0.0.1:8005/mcp"
+    mcp_docker_url: str = "http://127.0.0.1:8006/mcp"
+    mcp_search_url: str = "http://127.0.0.1:8007/mcp"
 
     # ---- Milvus 向量数据库 ----
     milvus_host: str = "127.0.0.1"
@@ -46,6 +48,10 @@ class Settings(BaseSettings):
     # ---- 消息修剪 ----
     # 对话历史超过此数量时自动截断，防止超出 LLM token 限制
     max_chat_messages: int = 20
+
+    # ---- Shell 工具配置 ----
+    shell_timeout: int = 30       # 命令执行超时（秒）
+    shell_max_output: int = 5000  # 输出截断字符数
 
     # ---- 日志配置 ----
     log_level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR

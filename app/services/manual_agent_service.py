@@ -43,10 +43,11 @@ from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.time_tool import get_current_time
 from app.tools.calculator_tool import calculate
+from app.tools.shell_tool import execute_shell
 from app.config import settings
 
 # === 全局工具清单 ===
-TOOLS = [retrieve_knowledge, get_current_time, calculate]
+TOOLS = [retrieve_knowledge, get_current_time, calculate, execute_shell]
 
 # === System Prompt ===
 SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
@@ -61,7 +62,13 @@ SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
    当用户需要精确计算、单位换算、时间戳转换时使用。
    如「xx 字节是多少 GB」「sqrt(144) 等于多少」。
 
-4. **通用对话**：
+4. **系统诊断**（execute_shell 工具）：
+   当用户需要查看系统状态、资源使用、进程信息、网络连通性时使用。
+   如「CPU 使用率多少」「磁盘满了没」「网络通不通」「容器运行状态」。
+   支持常用的诊断命令（ps, free, df, ping, docker ps 等），
+   所有操作均为只读，不会修改系统。
+
+5. **通用对话**：
    对于不涉及以上工具的日常闲聊，直接回答。
 
 重要规则：

@@ -31,6 +31,14 @@ def _build_mcp_servers():
             "transport": "streamable-http",
             "url": settings.mcp_ppt_url,
         },
+        "docker_tool": {
+            "transport": "streamable-http",
+            "url": settings.mcp_docker_url,
+        },
+        "search_tool": {
+            "transport": "streamable-http",
+            "url": settings.mcp_search_url,
+        },
     }
 
 # 重试配置

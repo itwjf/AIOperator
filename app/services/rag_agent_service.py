@@ -24,6 +24,7 @@ from app.core.exceptions import AIOperatorException
 from app.core.logger import logger
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.calculator_tool import calculate
+from app.tools.shell_tool import execute_shell
 from app.config import settings
 
 
@@ -62,7 +63,9 @@ SYSTEM_PROMPT = """你是一个智能运维助手，专门帮助运维工程师�
 你的能力：
 1. **知识库检索**：当用户问题涉及具体技术排查、故障诊断、运维操作时，
    使用 `retrieve_knowledge` 工具搜索内部运维文档。
-2. **通用对话**：对于不涉及技术排查的一般性问题（如打招呼、闲聊），直接回答。
+2. **系统诊断**：当用户需要查看系统状态、资源使用、进程或网络信息时，
+   使用 `execute_shell` 工具执行安全的诊断命令（如 free、df、ping、docker ps 等）。
+3. **通用对话**：对于不涉及技术排查的一般性问题（如打招呼、闲聊），直接回答。
 
 重要规则：
 - 如果调用了 retrieve_knowledge 工具，回答时必须引用工具返回的文档内容
@@ -106,7 +109,7 @@ def _get_agent():
                 # 例如，用户问了一个技术问题，Agent 会判断需要查知识库，就自动调用 retrieve_knowledge 工具，拿到文档后再生成回答。
         _agent = create_agent(
             llm,                        # 语言模型
-            tools=[retrieve_knowledge, calculate], # 工具列表
+            tools=[retrieve_knowledge, calculate, execute_shell], # 工具列表
             checkpointer=_get_memory(), # 记忆（会话持久化）
             system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],

@@ -24,6 +24,7 @@ from app.core.llm_factory import create_llm
 from app.core.message_trimmer import trim_conversation_history
 from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
+from app.tools.shell_tool import execute_shell
 from app.agent.mcp_client import get_mcp_client
 from app.config import settings
 
@@ -67,7 +68,25 @@ SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
    流程：create_presentation 初始化 → 根据需要交替使用 add_table_slide 和 add_content_slide
    → 最后 export_pptx 导出文件。
 
-5. **通用对话**：
+5. **Docker 管理**（list_containers / container_stats / container_logs / inspect_container / list_images / container_processes / restart_container 工具）：
+   当用户需要查看 Docker 容器状态、日志、资源使用或镜像信息时使用。
+   - 查看运行状态 → list_containers, inspect_container
+   - 排查性能问题 → container_stats
+   - 查看日志 → container_logs
+   - 查看镜像 → list_images
+   - 查看进程 → container_processes
+   - 重启容器 → restart_container（⚠️ 危险操作，需提供 reason 参数）
+
+6. **系统诊断**（execute_shell 工具）：
+   当用户需要查看系统状态、资源使用、进程信息、网络连通性时使用。
+   支持常用的诊断命令（ps、free、df、ping、docker ps 等），所有操作均为只读。
+
+7. **互联网搜索**（web_search / fetch_webpage 工具）：
+   当用户问题涉及最新技术资讯、外部文档或实时信息时使用。
+   - web_search：搜索互联网获取相关网页列表
+   - fetch_webpage：获取指定网页的完整文本内容（用于深度阅读）
+
+8. **通用对话**：
    不涉及以上工具的日常闲聊，直接回答。
 
 重要规则：
@@ -129,7 +148,7 @@ async def _get_agent():
         mcp.reset()
 
         # 本地工具：始终可用
-        local_tools = [retrieve_knowledge]
+        local_tools = [retrieve_knowledge, execute_shell]
 
         # MCP 远程工具：可能不可用（自愈）
         mcp_tools = await mcp.get_tools()

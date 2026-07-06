@@ -1,6 +1,6 @@
 # ============================================
 # AIOperator Docker 镜像
-# 一个镜像，四个服务：主应用 + 3 个 MCP Server
+# 一个镜像，六个服务：主应用 + 5 个 MCP Server
 # ============================================
 
 FROM python:3.11-slim
@@ -8,7 +8,7 @@ FROM python:3.11-slim
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖（pymysql 需要 libmysqlclient，python-pptx 需要 libffi）
+# 安装系统依赖
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \

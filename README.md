@@ -74,18 +74,31 @@ START → Planner（制定计划）→ Executor（执行步骤）→ Replanner�
 - **Reporter**: 综合所有步骤结果，生成结构化 Markdown 诊断报告
 - **保护机制**: 最多执行 5 步，防止死循环
 
-### 🔌 MCP 混合工具（三合一）
+### 🔌 工具体系（10+ 个工具，3 类来源）
 
 Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透明：
 
-| MCP Server | 端口 | 提供工具 | 说明 |
-|------------|:----:|------|------|
-| **Time Server** | 8003 | `get_current_time` | 时区感知时间查询 |
-| **DB Server** | 8004 | `list_tables`, `describe_table`, `execute_query` | MySQL 只读查询 |
-| **PPT Server** | 8005 | `create_presentation`, `add_content_slide`, `add_table_slide`, `export_pptx` | PowerPoint 生成 |
+| 来源 | 工具数 | 说明 |
+|------|:------:|------|
+| **本地 @tool** | 4 | `retrieve_knowledge`、`calculate`、`get_current_time`、`execute_shell` |
+| **MCP Server** | 14 | 时间、数据库、PPT、Docker 管理、Web 搜索 |
+| **总计** | ~~11~~ → **18** | 本次新增 7 个（Shell + Docker ×7 + Search ×2，去重时间工具） |
 
-- **自愈设计**: MCP Server 不可用时，Agent 自动降级为纯本地工具模式
-- **工具透明**: Agent 不关心工具来自本地还是远程 —— MCP 协议的核心价值
+#### MCP Server 一览
+
+| MCP Server | 端口 | 工具数 | 关键工具 |
+|------------|:----:|:------:|------|
+| **Time Server** | 8003 | 1 | `get_current_time` — 时区感知时间查询 |
+| **DB Server** | 8004 | 4 | `list_tables`、`describe_table`、`execute_query`、`get_row_count` |
+| **PPT Server** | 8005 | 4 | `create_presentation`、`add_content_slide`、`add_table_slide`、`export_pptx` |
+| **Docker Server** 🆕 | 8006 | 7 | `list_containers`、`container_stats`、`container_logs`、`inspect_container`、`list_images`、`container_processes`、`restart_container` |
+| **Search Server** 🆕 | 8007 | 2 | `web_search`、`fetch_webpage` |
+
+#### 安全设计亮点
+
+- **Shell 工具四层防护**: 命令白名单 → 参数黑名单 → 资源限制（30s/5000 字符）→ 结果包装
+- **自愈降级**: MCP Server 不可用时自动切换备用方案或降级为纯本地模式
+- **搜索双后端**: 有 `TAVILY_API_KEY` → Tavily（高质量），无 → DuckDuckGo（免费）
 
 ### 🌊 SSE 流式响应
 所有对话接口均支持 SSE（Server-Sent Events）流式输出：
@@ -101,7 +114,31 @@ Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透
 - Markdown 渲染 + 代码高亮
 
 ### 🐳 Docker 一键部署
-全栈容器化，一条命令拉起所有服务（FastAPI + 3 MCP Server + MySQL + Milvus）。详见 [部署指南](#部署指南)。
+全栈容器化，一条命令拉起所有服务（FastAPI + 5 MCP Server + MySQL + Milvus）。详见 [部署指南](#部署指南)。
+
+---
+
+## 📊 开发进度
+
+### SPEC 执行状态（2026-06-26 更新）
+
+| SPEC 文档 | 状态 | 进度 | 说明 |
+|-----------|:----:|:----:|------|
+| [SPEC_TOOLS.md](SPEC_TOOLS.md) | ✅ **已完成** | 100% | 3 类 10 个新工具全部开发完成 |
+| [SPEC_OBSERVABILITY.md](SPEC_OBSERVABILITY.md) | ⏳ **待开发** | 0% | LangFuse 可观测性系统，尚未开始 |
+
+<details>
+<summary><b>SPEC_TOOLS.md — 已完成详情（点击展开）</b></summary>
+
+| 阶段 | 工具 | 核心文件 | 验收 |
+|:----:|------|------|:--:|
+| 1 | `execute_shell` | [app/tools/shell_tool.py](app/tools/shell_tool.py) | ✅ 四层安全防护通过 |
+| 2 | Docker 管理 (7 工具) | [mcp_servers/docker_server.py](mcp_servers/docker_server.py) | ✅ 启动端口 8006 |
+| 3 | Web 搜索 (2 工具) | [mcp_servers/search_server.py](mcp_servers/search_server.py) | ✅ 启动端口 8007 |
+
+配套变更：`config.py`（+4 字段）、`pyproject.toml`（+3 依赖）、`docker-compose.yml`（+2 服务）、`.env` / `.env.example`（+5 变量）、3 个 Agent Service SYSTEM_PROMPT 已同步更新。
+
+</details>
 
 ---
 
@@ -142,9 +179,11 @@ Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透
 ┌───────────────────────────────────────┐
 │        MCP Servers（独立进程）          │
 │                                       │
-│  time_server  (8003) — 时间服务       │
-│  db_server    (8004) — 数据库服务     │
-│  ppt_server   (8005) — PPT 生成服务   │
+│  time_server   (8003) — 时间服务       │
+│  db_server     (8004) — 数据库服务     │
+│  ppt_server    (8005) — PPT 生成服务   │
+│  docker_server (8006) — Docker 管理 🆕 │
+│  search_server (8007) — Web 搜索   🆕 │
 │  (均基于 FastMCP，通过 HTTP 暴露工具)   │
 └───────────────────────────────────────┘
 ```
@@ -255,7 +294,13 @@ python mcp_servers/db_server.py
 # 终端 3：MCP PPT 服务
 python mcp_servers/ppt_server.py
 
-# 终端 4：主应用
+# 终端 4：MCP Docker 管理服务 🆕
+python mcp_servers/docker_server.py
+
+# 终端 5：MCP Web 搜索服务 🆕
+python mcp_servers/search_server.py
+
+# 终端 6：主应用
 python app/main.py
 # 或 uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
 ```
@@ -299,17 +344,24 @@ AIOperator/
 │   │   │   ├── executor.py        #     执行器
 │   │   │   └── replanner.py       #     重规划器
 │   │   └── mcp_client.py          #   MCP 客户端管理器
-│   ├── tools/                     # Agent 工具
+│   ├── tools/                     # Agent 工具（4 个本地工具）
 │   │   ├── knowledge_tool.py      #   知识库检索工具
-│   │   └── time_tool.py           #   时间查询工具
+│   │   ├── calculator_tool.py     #   安全数学计算器
+│   │   ├── time_tool.py           #   时区时间查询
+│   │   └── shell_tool.py          #   安全 Shell 命令执行 🆕
 │   └── core/                      # 基础设施
 │       ├── llm_factory.py         #   LLM 工厂
+│       ├── logger.py              #   loguru 日志系统
+│       ├── exceptions.py          #   应用异常类层次
+│       ├── message_trimmer.py     #   对话历史修剪
 │       └── milvus_client.py       #   Milvus 连接管理
-├── mcp_servers/                   # MCP 远程服务（独立进程）
+├── mcp_servers/                   # MCP 远程服务（5 个独立进程）
 │   ├── time_server.py             #   时间服务（FastMCP, Port 8003）
 │   ├── db_server.py               #   数据库服务（FastMCP, Port 8004）
 │   ├── ppt_server.py              #   PPT 生成服务（FastMCP, Port 8005）
-│   └── ppt_builder.py             #   PPT 渲染引擎（python-pptx）
+│   ├── ppt_builder.py             #   PPT 渲染引擎（python-pptx）
+│   ├── docker_server.py           #   Docker 管理服务（FastMCP, Port 8006）🆕
+│   └── search_server.py           #   Web 搜索服务（FastMCP, Port 8007）🆕
 ├── static/                        # 前端静态文件
 │   ├── index.html                 #   Vue 3 单页应用
 │   ├── app.js                     #   应用逻辑
@@ -352,10 +404,12 @@ AIOperator/
 ### MCP Server 端点
 
 | 服务 | 端口 | MCP 端点 | 健康检查 |
-|------|:----:|------|------|
+|------|:----:|------|:----:|
 | Time Server | 8003 | `/mcp` | `/health` |
 | DB Server | 8004 | `/mcp` | `/health` |
 | PPT Server | 8005 | `/mcp` | `/health` |
+| Docker Server 🆕 | 8006 | `/mcp` | `/health` |
+| Search Server 🆕 | 8007 | `/mcp` | `/health` |
 
 ### SSE 事件类型
 
@@ -423,6 +477,33 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 # Agent 调用 MCP PPT Server 自动创建演示文稿
 ```
 
+### 场景五：系统诊断 🆕
+
+```bash
+curl -X POST http://127.0.0.1:9900/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "看看服务器内存使用情况，查一下最近有什么异常日志"}'
+# Agent 自动调用 execute_shell 执行 free -h / journalctl 等诊断命令
+```
+
+### 场景六：Docker 运维 🆕
+
+```bash
+curl -X POST http://127.0.0.1:9900/api/mcp/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "有哪些容器在运行？nginx 容器最近有什么错误日志？"}'
+# Agent 调用 list_containers → container_logs（nginx）
+```
+
+### 场景七：联网搜索 🆕
+
+```bash
+curl -X POST http://127.0.0.1:9900/api/mcp/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "最新的 Kubernetes 1.32 版本有哪些新特性？"}'
+# Agent 调用 web_search 获取互联网上最新信息
+```
+
 ---
 
 ## 技术栈
@@ -435,8 +516,10 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 | **向量数据库** | Milvus 2.4 | 文档片段存储 + 语义检索 |
 | **关系数据库** | MySQL 8.0 | DB MCP Server 数据源 |
 | **Embedding** | text-embedding-v4 (DashScope) | 文本向量化 |
-| **MCP 协议** | FastMCP + langchain-mcp-adapters | 远程工具服务 + 客户端适配 |
+| **MCP 协议** | FastMCP + langchain-mcp-adapters | 远程工具服务（5 个 Server） |
 | **PPT 生成** | python-pptx | PowerPoint 文件创建和渲染 |
+| **Docker SDK** 🆕 | docker-py ≥ 7.0 | Docker 容器/镜像管理 |
+| **Web 搜索** 🆕 | Tavily + DuckDuckGo | 互联网搜索（双后端自愈降级） |
 | **前端** | Vue 3 (CDN) + marked.js + highlight.js | SPA 交互界面 |
 | **配置管理** | pydantic-settings | 类型安全的配置加载 |
 | **日志** | loguru | 结构化日志 |
@@ -457,6 +540,7 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 | 5 | **手动 Agent** | `manual_agent_service.py` | `StateGraph`、`ToolNode`、`bind_tools` |
 | 6 | **AIOps 诊断** | `aiops_service.py`, `planner.py`, `executor.py`, `replanner.py` | Plan-Execute-Replan、`with_structured_output` |
 | 7 | **MCP 协议** | `mcp_client.py`, `mcp_servers/` | FastMCP、MultiServerMCPClient、自愈设计 |
+| 8 | **工具扩展** 🆕 | `shell_tool.py`, `docker_server.py`, `search_server.py` | 安全模型设计、MCP Server 开发模式、双后端降级 |
 
 ---
 

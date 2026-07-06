@@ -9,12 +9,14 @@
 #   5. docker compose down -v        # 停止并删除数据卷
 #
 # 服务列表：
-#   mysql:3306    — MySQL 数据库
-#   milvus:19530  — Milvus 向量数据库
-#   app:9900      — FastAPI 主应用（含前端页面）
-#   mcp-time:8003 — MCP 时间服务
-#   mcp-db:8004   — MCP 数据库服务
-#   mcp-ppt:8005  — MCP PPT 生成服务
+#   mysql:3306     — MySQL 数据库
+#   milvus:19530   — Milvus 向量数据库
+#   app:9900       — FastAPI 主应用（含前端页面）
+#   mcp-time:8003  — MCP 时间服务
+#   mcp-db:8004    — MCP 数据库服务
+#   mcp-ppt:8005   — MCP PPT 生成服务
+#   mcp-docker:8006 — MCP Docker 管理服务
+#   mcp-search:8007 — MCP Web 搜索服务
 # ============================================
 
 services:
@@ -98,6 +100,26 @@ services:
       - "8005:8005"
     env_file: .env
 
+  mcp-docker:
+    build: .
+    container_name: aioperator-mcp-docker
+    restart: unless-stopped
+    command: python mcp_servers/docker_server.py
+    ports:
+      - "8006:8006"
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # 访问宿主机 Docker Daemon
+
+  mcp-search:
+    build: .
+    container_name: aioperator-mcp-search
+    restart: unless-stopped
+    command: python mcp_servers/search_server.py
+    ports:
+      - "8007:8007"
+    env_file: .env
+
   # ============================================
   # 主应用（FastAPI + 前端页面）
   # ============================================
@@ -116,6 +138,8 @@ services:
       - MCP_TIME_URL=http://mcp-time:8003/mcp
       - MCP_DB_URL=http://mcp-db:8004/mcp
       - MCP_PPT_URL=http://mcp-ppt:8005/mcp
+      - MCP_DOCKER_URL=http://mcp-docker:8006/mcp
+      - MCP_SEARCH_URL=http://mcp-search:8007/mcp
       - APP_HOST=0.0.0.0
       - DEBUG=false
     depends_on:
@@ -126,6 +150,10 @@ services:
       mcp-db:
         condition: service_started
       mcp-ppt:
+        condition: service_started
+      mcp-docker:
+        condition: service_started
+      mcp-search:
         condition: service_started
 
   # ============================================

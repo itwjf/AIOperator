@@ -176,7 +176,6 @@
             @keydown.enter.exact.prevent="sendMessage"
             placeholder="输入消息，Enter 发送…"
             :disabled="loading"
-            rows="1"
             aria-label="消息输入框"
           ></textarea>
           <button class="btn-send"
@@ -202,9 +201,9 @@
           <li>生成诊断报告与修复建议</li>
         </ul>
         <textarea
+          ref="diagnosisInput"
           v-model="diagnosisScope"
           placeholder="指定诊断范围（可选），如：数据库连接池"
-          rows="2"
           @keydown.enter.exact.prevent="confirmDiagnosis"
           @keydown.escape="cancelDiagnosis"
           aria-label="诊断范围输入"

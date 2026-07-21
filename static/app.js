@@ -51,6 +51,7 @@ const app = createApp({
 
     const msgContainer = ref(null);
     const inputBox = ref(null);
+    const diagnosisInput = ref(null);
 
     // 液态玻璃模式切换指示器 — 映射 chatMode 到索引
     const modeIndex = computed(() => {
@@ -129,6 +130,27 @@ const app = createApp({
       });
     }
 
+    // --- textarea 自动伸缩 ---
+    // 行高 15px × 1.4 = 21px，padding 上下共 24px
+    // 6 行 ≈ 150px，clip 在 150px 以上内部滚动
+    const TEXTAREA_MAX = 150;
+
+    function autoResizeTextarea(el) {
+      if (!el) return;
+      el.style.transition = 'none';
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, TEXTAREA_MAX) + 'px';
+      // 强制重排后再恢复过渡动画
+      el.offsetHeight;
+      el.style.transition = '';
+    }
+
+    watch(input, () => nextTick(() => autoResizeTextarea(inputBox.value)));
+    watch(diagnosisScope, () => nextTick(() => autoResizeTextarea(diagnosisInput.value)));
+    watch(showDiagnosisModal, (v) => {
+      if (v) nextTick(() => autoResizeTextarea(diagnosisInput.value));
+    });
+
     // --- 会话自动命名 ---
     // 匹配 "会话 N" 格式（N 为数字），判断是否默认名称
     function isDefaultSessionName(name) {
@@ -198,6 +220,7 @@ const app = createApp({
       const text = input.value.trim();
       if (!text || loading.value) return;
       input.value = '';
+      nextTick(() => autoResizeTextarea(inputBox.value));
 
       // 添加用户消息
       messages.value.push({ role: 'user', html: renderMarkdown(text) });
@@ -443,13 +466,14 @@ const app = createApp({
     // --- 生命周期 ---
     onMounted(() => {
       inputBox.value?.focus();
+      nextTick(() => autoResizeTextarea(inputBox.value));
     });
 
     return {
       sessions, currentSessionId, messages, input, loading,
       useStream, chatMode, modeIndex, sidebarCollapsed,
       showDiagnosisModal, diagnosisScope,
-      msgContainer, inputBox,
+      msgContainer, inputBox, diagnosisInput,
       newSession, switchSession, deleteSession,
       sendMessage, startAIOps, confirmDiagnosis, cancelDiagnosis,
       uploadFile,

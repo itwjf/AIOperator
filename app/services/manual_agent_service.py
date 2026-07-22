@@ -34,11 +34,11 @@ from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from app.core.llm_factory import create_llm
 from app.core.message_trimmer import trim_conversation_history
+from app.core.checkpoint import get_checkpointer
 from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.time_tool import get_current_time
@@ -80,14 +80,6 @@ SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
 
 # === 全局单例 ===
 _graph = None
-_memory: MemorySaver | None = None
-
-
-def _get_memory() -> MemorySaver:
-    global _memory
-    if _memory is None:
-        _memory = MemorySaver()
-    return _memory
 
 
 # === State 定义 ===
@@ -171,7 +163,7 @@ def _build_graph():
     graph.add_edge("tools", "agent")  # tools 执行完 → 回到 agent 再判断
 
     # 编译时注入 checkpointer，所有 state 变更自动持久化
-    return graph.compile(checkpointer=_get_memory())
+    return graph.compile(checkpointer=get_checkpointer("manual"))
 
 
 def _get_graph():

@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     shell_timeout: int = 30       # 命令执行超时（秒）
     shell_max_output: int = 5000  # 输出截断字符数
 
+    # ---- 对话历史持久化（Checkpointer）----
+    # SQLite 文件存放目录；Docker 部署时挂载到 volume，保证重启不丢
+    checkpoint_dir: str = "data"
+
     # ---- 日志配置 ----
     log_level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
     log_dir: str = "logs"    # 日志文件目录

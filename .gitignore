@@ -32,6 +32,15 @@ logs/
 # 生成文件
 output/
 
+# 对话历史持久化（SQLite 检查点）
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# 测试缓存
+.pytest_cache/
+
 # 调试临时文件
 debug_tools.log
 

@@ -41,7 +41,6 @@ AIOps 诊断服务 — Plan-Execute-Replan 工作流编排。
 """
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agent.aiops.state import PlanExecuteState
@@ -49,11 +48,11 @@ from app.agent.aiops.planner import run_planner
 from app.agent.aiops.executor import run_executor
 from app.agent.aiops.replanner import run_replanner
 from app.core.llm_factory import create_llm
+from app.core.checkpoint import get_checkpointer
 from app.core.exceptions import AIOperatorException
 
 # === 全局单例 ===
 _graph = None
-_memory: MemorySaver | None = None
 
 # === 预设诊断 Prompt ===
 DIAGNOSE_TEMPLATE = """请对当前系统进行全面诊断：
@@ -82,13 +81,6 @@ REPORTER_PROMPT = """你是一个资深的 SRE 运维专家。请基于以下诊
 3. **根因分析** — 如果定位到了问题根因，详细说明
 4. **建议措施** — 具体的修复或优化建议（按优先级排列）
 5. **后续步骤** — 建议的后续监控或深入调查方向"""
-
-
-def _get_memory() -> MemorySaver:
-    global _memory
-    if _memory is None:
-        _memory = MemorySaver()
-    return _memory
 
 
 async def _run_reporter(state: dict) -> dict:
@@ -148,7 +140,7 @@ def _build_graph():
 
     graph.add_edge("reporter", END)
 
-    return graph.compile(checkpointer=_get_memory())
+    return graph.compile(checkpointer=get_checkpointer("aiops"))
 
 
 def _get_graph():

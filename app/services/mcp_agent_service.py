@@ -16,38 +16,16 @@ MCP Agent 服务 — 混合本地工具和 MCP 远程工具的 Agent。
 """
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import AgentMiddleware
-from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 
 from app.core.llm_factory import create_llm
-from app.core.message_trimmer import trim_conversation_history
+from app.core.message_trimmer import trim_conversation_history, MessageTrimmerMiddleware
+from app.core.checkpoint import get_checkpointer
 from app.core.exceptions import AIOperatorException
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.shell_tool import execute_shell
 from app.agent.mcp_client import get_mcp_client
 from app.config import settings
-
-
-# === Message Trimmer Middleware ===
-# 在每次 LLM 调用前自动修剪消息历史，防止超出 token 限制。
-
-
-class MessageTrimmerMiddleware(AgentMiddleware):
-    """Agent 中间件：在每次模型调用前自动修剪消息历史。"""
-
-    def __init__(self, max_messages: int = 20):
-        super().__init__()
-        self.max_messages = max_messages
-
-    async def awrap_model_call(self, request, handler):
-        """拦截模型调用，修剪消息后交给 handler 执行。"""
-        if len(request.messages) > self.max_messages:
-            trimmed = trim_conversation_history(
-                list(request.messages), self.max_messages
-            )
-            request = request.override(messages=trimmed)
-        return await handler(request)
 
 
 # === System Prompt ===
@@ -97,14 +75,6 @@ SYSTEM_PROMPT = """你是一个智能运维助手，具备以下能力：
 
 # === 全局单例 ===
 _agent = None
-_memory: MemorySaver | None = None
-
-
-def _get_memory() -> MemorySaver:
-    global _memory
-    if _memory is None:
-        _memory = MemorySaver()
-    return _memory
 
 
 def get_all_tools_info() -> dict:
@@ -160,7 +130,7 @@ async def _get_agent():
         _agent = create_agent(
             llm,
             tools=all_tools,
-            checkpointer=_get_memory(),
+            checkpointer=get_checkpointer("mcp"),
             system_prompt=SYSTEM_PROMPT,
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )

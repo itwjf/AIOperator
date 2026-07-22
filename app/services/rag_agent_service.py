@@ -9,17 +9,16 @@ RAG Agent 服务 — 将检索工具 + LLM + 记忆组合成一个能自动查�
 
 技术实现：
   - LangChain create_agent：自动处理「规划 → 调工具 → 拿结果 → 回答」循环
-  - LangGraph MemorySaver：持久化对话历史，用 thread_id 区分会话
+  - LangGraph SqliteSaver：持久化对话历史到文件，用 thread_id 区分会话
   - 消息修剪：通过 AgentMiddleware 在每次 LLM 调用前自动截断，防止爆 token
 """
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import AgentMiddleware
-from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 
 from app.core.llm_factory import create_llm
-from app.core.message_trimmer import trim_conversation_history
+from app.core.message_trimmer import trim_conversation_history, MessageTrimmerMiddleware
+from app.core.checkpoint import get_checkpointer
 from app.core.exceptions import AIOperatorException
 from app.core.logger import logger
 from app.tools.knowledge_tool import retrieve_knowledge
@@ -30,29 +29,6 @@ from app.config import settings
 
 # 全局单例
 _agent = None
-_memory: MemorySaver | None = None
-
-
-# === Message Trimmer Middleware ===
-# 在每次 LLM 调用前自动修剪消息历史，防止超出 token 限制。
-# AgentMiddleware.awrap_model_call 可以拦截并修改发往 LLM 的消息列表。
-
-
-class MessageTrimmerMiddleware(AgentMiddleware):
-    """Agent 中间件：在每次模型调用前自动修剪消息历史。"""
-
-    def __init__(self, max_messages: int = 20):
-        super().__init__()
-        self.max_messages = max_messages
-
-    async def awrap_model_call(self, request, handler):
-        """拦截模型调用，修剪消息后交给 handler 执行。"""
-        if len(request.messages) > self.max_messages:
-            trimmed = trim_conversation_history(
-                list(request.messages), self.max_messages
-            )
-            request = request.override(messages=trimmed)
-        return await handler(request)
 
 
 # === System Prompt ===
@@ -76,27 +52,13 @@ SYSTEM_PROMPT = """你是一个智能运维助手，专门帮助运维工程师�
 """
 
 
-def _get_memory() -> MemorySaver:
-    """获取 MemorySaver 单例 — 存储所有会话的对话历史。
-
-    MemorySaver 是 LangGraph 的内存级检查点存储：
-      - 每个 thread_id 对应一份独立的对话历史
-      - 服务重启后历史会丢失
-      - 生产环境应该换成 SqliteSaver 或 PostgresSaver
-    """
-    global _memory
-    if _memory is None:
-        _memory = MemorySaver()
-    return _memory
-
-
 def _get_agent():
     """获取 Agent 单例 — 首次调用时初始化。
 
     初始化做了什么？
       1. 创建 LLM 实例（temperature=0.7，适合对话）
       2. 注册知识检索工具
-      3. 挂载 MemorySaver（用于会话记忆）
+      3. 挂载 SqliteSaver（用于会话记忆，持久化到文件）
       4. 注入 system_prompt（定义 Agent 行为）
     """
     global _agent
@@ -110,7 +72,7 @@ def _get_agent():
         _agent = create_agent(
             llm,                        # 语言模型
             tools=[retrieve_knowledge, calculate, execute_shell], # 工具列表
-            checkpointer=_get_memory(), # 记忆（会话持久化）
+            checkpointer=get_checkpointer("rag"), # 记忆（会话持久化，SQLite）
             system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )

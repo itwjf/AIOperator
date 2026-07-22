@@ -132,6 +132,8 @@ services:
     ports:
       - "${APP_PORT:-9900}:9900"
     env_file: .env
+    volumes:
+      - checkpoint_data:/app/data    # 持久化 SQLite 检查点文件，重启不丢对话历史
     environment:
       - MILVUS_HOST=milvus           # 覆盖本地 127.0.0.1 → Docker 容器名
       - DB_HOST=mysql                # 覆盖本地 127.0.0.1 → Docker 容器名
@@ -142,6 +144,7 @@ services:
       - MCP_SEARCH_URL=http://mcp-search:8007/mcp
       - APP_HOST=0.0.0.0
       - DEBUG=false
+      - CHECKPOINT_DIR=/app/data     # SQLite 检查点存储目录
     depends_on:
       milvus:
         condition: service_healthy
@@ -198,3 +201,4 @@ volumes:
   mysql_data:
   milvus_data:
   langfuse_db:
+  checkpoint_data:                   # 对话历史持久化（SQLite 检查点）

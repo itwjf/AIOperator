@@ -214,50 +214,52 @@ docker compose ps
 
 > 📖 详细部署说明、故障排查、生产环境配置请阅读 **[DEPLOY.md](DEPLOY.md)**。
 
-### 方式二：本地开发运行
+### 方式二：本地开发运行（开发阶段推荐）
+
+> ⚡ **开发阶段请使用本地方式，不要用 Docker。**  
+> Docker 每次改代码都需要重新 build 镜像（下载 pip 包很慢），本地 `pip install -e .` 修改代码即时生效，配合 `--reload` 热重载，开发效率远高于 Docker。
 
 #### 环境要求
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
 | Python | ≥ 3.11 | 运行环境 |
-| MySQL | 8.0 | 关系型数据库（DB MCP Server 需要） |
-| Milvus | ≥ 2.4 | 向量数据库 |
+| MySQL | 8.0 | 关系型数据库（DB MCP Server 需要，可选） |
+| Milvus | ≥ 2.4 | 向量数据库（可选） |
 | DashScope API Key | — | 阿里云百炼平台（LLM + Embedding） |
 
-#### 1. 安装依赖
+#### 首次环境搭建
 
 ```bash
-# 推荐使用虚拟环境
+# 1. 创建虚拟环境
 python -m venv .venv
 # Windows
 .venv\Scripts\activate
 # Linux/Mac
 source .venv/bin/activate
 
+# 2. 安装依赖（editable 模式，修改代码即时生效）
 pip install -e .
-```
 
-#### 2. 配置环境变量
-
-复制 `.env.example` 为 `.env`，填入 API Key 和数据库连接信息：
-
-```bash
+# 3. 配置环境变量（从模板复制，填入真实 API Key）
 cp .env.example .env
+# 编辑 .env，修改 DASHSCOPE_API_KEY 为你的真实 Key
 ```
 
-关键配置项：
+> 💡 **获取 API Key**: 前往 [阿里云百炼平台](https://bailian.console.aliyun.com/) 开通 DashScope 服务。
+
+关键配置项（`.env`）：
 
 ```bash
 # LLM（必填）
 DASHSCOPE_API_KEY=sk-your-api-key-here
 LLM_MODEL=qwen-plus
 
-# 向量数据库
+# 向量数据库（如使用 RAG 功能）
 MILVUS_HOST=127.0.0.1
 MILVUS_PORT=19530
 
-# MySQL（DB MCP Server 使用）
+# MySQL（DB MCP Server 使用，可选）
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
@@ -265,48 +267,41 @@ DB_PASSWORD=your-password
 DB_NAME=aioperator
 ```
 
-> 💡 **获取 API Key**: 前往 [阿里云百炼平台](https://bailian.console.aliyun.com/) 开通 DashScope 服务。
-
-#### 3. 启动基础设施
-
-确保 MySQL 和 Milvus 已运行。如果只有 Milvus：
-
 ```bash
+# 4. 启动基础设施（按需）
+# 如果需要 Milvus 向量数据库：
 docker compose -f vector-database.yml up -d
+# 如果需要 MySQL（DB MCP Server 使用），确保本地 MySQL 服务已启动
 ```
 
-#### 4. 启动服务
+#### 日常开发启动（分终端）
 
-**Windows（推荐）**：
-
-双击 `start.bat`，自动启动所有服务（主应用 + 3 个 MCP Server）。
-
-**手动启动**：
+MCP Server 支持"按需启动"——只需要启动你实际用到的 MCP 服务，未启动的服务会自动降级跳过。
 
 ```bash
 # 终端 1：MCP 时间服务
-python mcp_servers/time_server.py
+python mcp_servers/time_server.py         # :8003
 
 # 终端 2：MCP 数据库服务
-python mcp_servers/db_server.py
+python mcp_servers/db_server.py           # :8004
 
-# 终端 3：MCP PPT 服务
-python mcp_servers/ppt_server.py
+# 终端 3：MCP PPT 生成服务
+python mcp_servers/ppt_server.py          # :8005
 
 # 终端 4：MCP Docker 管理服务 🆕
-python mcp_servers/docker_server.py
+python mcp_servers/docker_server.py       # :8006
 
 # 终端 5：MCP Web 搜索服务 🆕
-python mcp_servers/search_server.py
+python mcp_servers/search_server.py       # :8007
 
-# 终端 6：主应用
-python app/main.py
+# 终端 6：主应用（--reload 热重载）
+python app/main.py                        # :9900
 # 或 uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
 ```
 
-浏览器打开 **http://127.0.0.1:9900**。
+浏览器打开 **http://127.0.0.1:9900**，API 文档见 **http://127.0.0.1:9900/docs**。
 
-#### 5. 上传知识库文档
+#### 上传知识库文档
 
 1. 点击侧边栏底部的「📄 上传文档」按钮
 2. 选择 Markdown 或 TXT 文件

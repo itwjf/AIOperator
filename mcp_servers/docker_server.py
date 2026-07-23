@@ -17,6 +17,8 @@ import os
 import sys
 import json
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 
 # 简单的日志输出（MCP Server 独立进程，不依赖 app.core.logger）
@@ -390,6 +392,14 @@ def _format_bytes(size: int) -> str:
             return f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} PB"
+
+
+# === 健康检查 ===
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """健康检查端点，返回服务状态。"""
+    return JSONResponse({"status": "ok", "service": "DockerTool"})
 
 
 # 启动入口

@@ -10,12 +10,15 @@ MCP Web 搜索服务 — 提供互联网搜索和网页内容获取功能。
 
 访问：
   http://127.0.0.1:8007/mcp    — MCP 端点
+  http://127.0.0.1:8007/health — 健康检查
 """
 
 import os
 import re
 import sys
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # 创建 MCP Server 实例
 mcp = FastMCP("SearchTool")
@@ -207,6 +210,14 @@ def fetch_webpage(url: str, max_length: int = 3000) -> str:
     except Exception as e:
         _log("ERROR", f"fetch_webpage 失败: {e}")
         return _format_search_error(f"获取网页失败: {e}")
+
+
+# === 健康检查 ===
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """健康检查端点，返回服务状态。"""
+    return JSONResponse({"status": "ok", "service": "SearchTool"})
 
 
 # 启动入口

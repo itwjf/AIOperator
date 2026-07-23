@@ -9,11 +9,13 @@ MCP 时间服务 — 把 get_current_time 拆成独立的 MCP Server。
 
 访问：
   http://127.0.0.1:8003/mcp    — MCP 端点
-  http://127.0.0.1:8003/health — 健康检查（FastMCP 自动提供）
+  http://127.0.0.1:8003/health — 健康检查
 """
 
 from datetime import datetime, timezone, timedelta
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # 创建 MCP Server 实例
 mcp = FastMCP("TimeTool")
@@ -62,6 +64,14 @@ def get_current_time(timezone_name: str = "Asia/Shanghai") -> str:
     now = datetime.now(tz)
     label = TIMEZONE_MAP.get(timezone_name, timezone_name)
     return now.strftime(f"%Y-%m-%d %A %H:%M:%S ({label})")
+
+
+# === 健康检查 ===
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """健康检查端点，返回服务状态。"""
+    return JSONResponse({"status": "ok", "service": "TimeTool"})
 
 
 # 启动入口

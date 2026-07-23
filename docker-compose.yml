@@ -75,6 +75,12 @@ services:
     ports:
       - "8003:8003"
     env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   mcp-db:
     build: .
@@ -90,6 +96,12 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   mcp-ppt:
     build: .
@@ -99,6 +111,12 @@ services:
     ports:
       - "8005:8005"
     env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   mcp-docker:
     build: .
@@ -110,6 +128,12 @@ services:
     env_file: .env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # 访问宿主机 Docker Daemon
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   mcp-search:
     build: .
@@ -119,6 +143,12 @@ services:
     ports:
       - "8007:8007"
     env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   # ============================================
   # 主应用（FastAPI + 前端页面）

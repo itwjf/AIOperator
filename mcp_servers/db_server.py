@@ -9,7 +9,7 @@ MCP 数据库服务 — 让 AI Agent 能够从 MySQL 读取数据。
 
 访问：
   http://127.0.0.1:8004/mcp    — MCP 端点
-  http://127.0.0.1:8004/health — 健康检查（FastMCP 自动提供）
+  http://127.0.0.1:8004/health — 健康检查
 
 环境变量（在 .env 中配置）：
   DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
@@ -19,6 +19,8 @@ import os
 import pymysql
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # 独立运行时加载 .env（不依赖 app.config）
 load_dotenv()
@@ -267,6 +269,14 @@ def get_row_count(table_name: str) -> str:
 
     except Exception as e:
         return f"[数据库错误] 无法获取行数: {str(e)}"
+
+
+# === 健康检查 ===
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """健康检查端点，返回服务状态。"""
+    return JSONResponse({"status": "ok", "service": "DBTool"})
 
 
 # 启动入口

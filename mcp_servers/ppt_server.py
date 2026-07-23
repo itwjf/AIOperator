@@ -8,6 +8,7 @@ MCP PPT 服务 — 让 AI Agent 能够生成 PPT 文件。
 
 访问：
   http://127.0.0.1:8005/mcp    — MCP 端点
+  http://127.0.0.1:8005/health — 健康检查
 """
 
 import sys, os
@@ -15,6 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from mcp_servers.ppt_builder import get_builder
 
@@ -132,6 +135,14 @@ def create_presentation(title: str, subtitle: str = "", author: str = "", sessio
     builder = get_builder(session_id)
     builder.add_cover(title, subtitle, author)
     return f"PPT 已创建。标题: {title}，副标题: {subtitle or '（无）'}，当前共 {builder.slide_count} 页。"
+
+
+# === 健康检查 ===
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """健康检查端点，返回服务状态。"""
+    return JSONResponse({"status": "ok", "service": "PPTTool"})
 
 
 # 启动入口

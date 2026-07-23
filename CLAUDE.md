@@ -9,7 +9,7 @@
 **AIOperator** — 基于 LangChain/LangGraph 的智能运维 Agent 系统。
 
 - 4 种 Agent 模式：RAG Agent、手动 Agent、MCP Agent、AIOps 诊断
-- 3 个 MCP Server：时间服务、数据库服务、PPT 生成服务
+- 5 个 MCP Server：时间服务、数据库服务、PPT 生成、Docker 管理、Web 搜索
 - 1 个向量知识库：Milvus + DashScope Embedding
 - 前端：纯 HTML/CSS/JS 单页应用（`static/`）
 
@@ -49,6 +49,7 @@ AIOperator/
 │   │   ├── logger.py        # loguru 日志系统初始化
 │   │   ├── exceptions.py    # 应用异常类层次
 │   │   ├── message_trimmer.py  # 对话历史滑动窗口修剪
+│   │   ├── checkpoint.py    # 对话检查点持久化
 │   │   └── milvus_client.py # Milvus 连接单例 + Collection 管理
 │   ├── services/            # 业务逻辑层
 │   │   ├── rag_agent_service.py     # RAG Agent（create_agent + knowledge_tool）
@@ -68,11 +69,14 @@ AIOperator/
 │   └── tools/               # 本地工具（@tool 装饰器）
 │       ├── knowledge_tool.py   # retrieve_knowledge — Milvus 语义搜索
 │       ├── calculator_tool.py  # calculate — 安全数学表达式计算
-│       └── time_tool.py        # get_current_time — 时区时间查询
+│       ├── time_tool.py        # get_current_time — 时区时间查询
+│       └── shell_tool.py       # execute_shell — 安全 Shell 命令执行
 ├── mcp_servers/             # MCP Server（独立进程）
 │   ├── time_server.py       # TimeTool :8003
 │   ├── db_server.py         # DBTool :8004（MySQL 只读查询）
-│   └── ppt_server.py        # PPTTool :8005（PPT 生成）
+│   ├── ppt_server.py        # PPTTool :8005（PPT 生成）
+│   ├── docker_server.py     # DockerTool :8006（Docker 容器管理）
+│   └── search_server.py     # SearchTool :8007（Web 搜索）
 ├── static/                  # 前端（HTML/CSS/JS 单页应用）
 ├── aiops-docs/              # 知识库 Markdown 源文件
 ├── logs/                    # 日志文件（按天轮转）
@@ -81,7 +85,7 @@ AIOperator/
 ├── Dockerfile               # 单镜像多服务
 ├── pyproject.toml           # 依赖管理
 ├── .env                     # 环境变量（含 secrets，不提交 git）
-├── start.bat / stop.bat     # 本地开发启停脚本
+├── start.bat                # 本地开发一键启动脚本
 └── SPEC_*.md                # SPEC 规范文档
 ```
 
@@ -205,42 +209,131 @@ AIOps 额外类型：`plan`, `step_start`, `step_result`, `replan`, `report`
 
 ## 八、常用命令
 
+### 8.1 本地开发（推荐）
+
+> **开发阶段用本地 Python 直接运行，不要用 Docker。** Docker 每次改代码需重新 build（下载 pip 包很慢），本地 `pip install -e .` 修改代码即时生效。
+
 ```bash
-# 本地开发启动
-python app/main.py                    # 主应用 :9900
-python mcp_servers/time_server.py     # 时间服务 :8003
-python mcp_servers/db_server.py       # 数据库服务 :8004
-python mcp_servers/ppt_server.py      # PPT 服务 :8005
-# 或一键：start.bat
+# ========== 首次环境搭建 ==========
 
-# Docker 部署
-docker compose up -d                  # 启动全部服务
-docker compose logs -f app            # 查看主应用日志
-docker compose down                   # 停止全部服务
+# 1. 创建虚拟环境
+python -m venv .venv
+.venv\Scripts\activate                # Windows
+# source .venv/bin/activate           # Linux/Mac
 
-# 安装依赖
-pip install -e .                      # editable 模式（pyproject.toml）
+# 2. 安装依赖（editable 模式，修改代码即时生效）
+pip install -e .
 
+# 3. 配置环境变量（从模板复制，填入真实 API Key）
+cp .env.example .env
+# 编辑 .env，修改 DASHSCOPE_API_KEY 为你的真实 Key
+
+# 4. 启动 Milvus 向量数据库（如需要）
+docker compose -f vector-database.yml up -d
+
+
+# ========== 日常开发启动（分 6 个终端） ==========
+
+# 终端 1：MCP 时间服务
+python mcp_servers/time_server.py         # :8003
+
+# 终端 2：MCP 数据库服务
+python mcp_servers/db_server.py           # :8004
+
+# 终端 3：MCP PPT 生成服务
+python mcp_servers/ppt_server.py          # :8005
+
+# 终端 4：MCP Docker 管理服务
+python mcp_servers/docker_server.py       # :8006
+
+# 终端 5：MCP Web 搜索服务
+python mcp_servers/search_server.py       # :8007
+
+# 终端 6：主应用（--reload 热重载）
+python app/main.py                        # :9900
+# 或：uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
+```
+
+MCP Server 支持"按需启动"：只需要用到的 MCP 服务即可，未启动的服务会自动降级跳过。
+
+
+### 8.2 Docker 部署（仅用于部署/演示）
+
+```bash
+docker compose up -d                     # 启动全部服务
+docker compose up -d --build             # 重新构建镜像后启动
+docker compose logs -f app               # 查看主应用日志
+docker compose ps                        # 查看服务状态
+docker compose down                      # 停止全部服务
+```
+
+
+### 8.3 其他常用命令
+
+```bash
 # 验证接口
 curl http://127.0.0.1:9900/health
 curl -X POST http://127.0.0.1:9900/api/chat -H "Content-Type: application/json" -d '{"question":"你好"}'
+
+# 查看 Swagger API 文档
+# 浏览器打开 http://127.0.0.1:9900/docs
+
+# 安装依赖
+pip install -e .                         # editable 模式（pyproject.toml）
 ```
 
 ## 九、当前工具清单
 
-| 工具 | 来源 | 类型 | 说明 |
-|------|------|------|------|
-| `retrieve_knowledge` | `app/tools/knowledge_tool.py` | 本地 @tool | Milvus 语义搜索 |
-| `calculate` | `app/tools/calculator_tool.py` | 本地 @tool | 安全数学计算 |
-| `get_current_time` | `mcp_servers/time_server.py` | MCP :8003 | 时区时间查询 |
-| `list_tables` | `mcp_servers/db_server.py` | MCP :8004 | 列出数据库表 |
-| `describe_table` | `mcp_servers/db_server.py` | MCP :8004 | 查看表结构 |
-| `execute_query` | `mcp_servers/db_server.py` | MCP :8004 | 只读 SQL 查询 |
-| `get_row_count` | `mcp_servers/db_server.py` | MCP :8004 | 表行数统计 |
-| `create_presentation` | `mcp_servers/ppt_server.py` | MCP :8005 | 创建 PPT |
-| `add_table_slide` | `mcp_servers/ppt_server.py` | MCP :8005 | 添加表格页 |
-| `add_content_slide` | `mcp_servers/ppt_server.py` | MCP :8005 | 添加文字页 |
-| `export_pptx` | `mcp_servers/ppt_server.py` | MCP :8005 | 导出 PPT 文件 |
+### 本地工具（`app/tools/`）
+
+| 工具 | 文件 | 说明 |
+|------|------|------|
+| `retrieve_knowledge` | `knowledge_tool.py` | Milvus 语义搜索 |
+| `calculate` | `calculator_tool.py` | 安全数学表达式计算 |
+| `execute_shell` | `shell_tool.py` | 安全 Shell 命令执行 |
+
+### MCP Time Server（:8003）
+
+| 工具 | 说明 |
+|------|------|
+| `get_current_time` | 时区时间查询 |
+
+### MCP DB Server（:8004）
+
+| 工具 | 说明 |
+|------|------|
+| `list_tables` | 列出数据库表 |
+| `describe_table` | 查看表结构 |
+| `execute_query` | 只读 SQL 查询 |
+| `get_row_count` | 表行数统计 |
+
+### MCP PPT Server（:8005）
+
+| 工具 | 说明 |
+|------|------|
+| `create_presentation` | 创建 PPT |
+| `add_table_slide` | 添加表格页 |
+| `add_content_slide` | 添加文字页 |
+| `export_pptx` | 导出 PPT 文件 |
+
+### MCP Docker Server（:8006）
+
+| 工具 | 说明 |
+|------|------|
+| `list_containers` | 列出容器及状态 |
+| `container_stats` | 容器资源统计 |
+| `container_logs` | 查看容器日志 |
+| `inspect_container` | 容器详细信息 |
+| `list_images` | 列出 Docker 镜像 |
+| `container_processes` | 容器内进程列表 |
+| `restart_container` | ⚠️ 重启容器 |
+
+### MCP Search Server（:8007）
+
+| 工具 | 说明 |
+|------|------|
+| `web_search` | 互联网搜索 |
+| `fetch_webpage` | 获取网页文本内容 |
 
 ## 十、端口分配
 

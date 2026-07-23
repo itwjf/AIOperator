@@ -159,46 +159,7 @@ services:
       mcp-search:
         condition: service_started
 
-  # ============================================
-  # LangFuse 可观测性平台
-  # ============================================
-
-  langfuse-postgres:
-    image: postgres:15-alpine
-    container_name: aioperator-langfuse-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
-      POSTGRES_DB: langfuse
-    ports:
-      - "5433:5432"
-    volumes:
-      - langfuse_db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U langfuse"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  langfuse-server:
-    image: langfuse/langfuse:2
-    container_name: aioperator-langfuse
-    restart: unless-stopped
-    depends_on:
-      langfuse-postgres:
-        condition: service_healthy
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
-      NEXTAUTH_SECRET: mysecret-mysecret-mysecret-mysecret123  # 生产环境请更换为强密码
-      NEXTAUTH_URL: http://localhost:3000
-      SALT: mysalt                                      # 生产环境请更换为强密码
-      ENCRYPTION_KEY: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6  # 生产环境请更换
-
 volumes:
   mysql_data:
   milvus_data:
-  langfuse_db:
   checkpoint_data:                   # 对话历史持久化（SQLite 检查点）

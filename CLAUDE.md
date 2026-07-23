@@ -77,7 +77,7 @@ AIOperator/
 ├── aiops-docs/              # 知识库 Markdown 源文件
 ├── logs/                    # 日志文件（按天轮转）
 ├── output/                  # PPT 导出目录
-├── docker-compose.yml       # 7 个服务：mysql, milvus, app, 3×mcp, langfuse(计划中)
+├── docker-compose.yml       # 8 个服务：mysql, milvus, app, 5×mcp
 ├── Dockerfile               # 单镜像多服务
 ├── pyproject.toml           # 依赖管理
 ├── .env                     # 环境变量（含 secrets，不提交 git）
@@ -102,7 +102,6 @@ AIOperator/
 **所有外部依赖不可用时，系统降级而非崩溃：**
 
 - MCP Server 挂了 → `get_tools()` 返回空列表，Agent 用剩余工具继续
-- LangFuse 挂了 → 追踪静默跳过（`get_callback_handler()` 返回 None）
 - Milvus 挂了 → raise `VectorDBError`，服务层 catch 返回友好消息
 - LLM API 挂了 → raise `LLMServiceError`，服务层 catch 返回友好消息
 
@@ -186,7 +185,6 @@ AIOps 额外类型：`plan`, `step_start`, `step_result`, `replan`, `report`
 | 要开发的功能 | 先读的 SPEC |
 |-------------|------------|
 | 新增工具（Shell/Docker/WebSearch） | `SPEC_TOOLS.md` |
-| LangFuse 可观测性系统 | `SPEC_OBSERVABILITY.md` |
 
 ### 7.2 依赖管理
 
@@ -252,9 +250,7 @@ curl -X POST http://127.0.0.1:9900/api/chat -H "Content-Type: application/json" 
 | 8003 | MCP Time | 时间查询 |
 | 8004 | MCP DB | 数据库查询 |
 | 8005 | MCP PPT | PPT 生成 |
-| 8006 | MCP Docker | 计划中（SPEC_TOOLS.md） |
-| 8007 | MCP Search | 计划中（SPEC_TOOLS.md） |
-| 3000 | LangFuse Dashboard | 计划中（SPEC_OBSERVABILITY.md） |
+| 8006 | MCP Docker | Docker 容器管理 |
+| 8007 | MCP Search | Web 搜索 |
 | 19530 | Milvus | 向量数据库 |
 | 3306 | MySQL | 关系型数据库 |
-| 5433 | LangFuse Postgres | 计划中（映射 5432） |

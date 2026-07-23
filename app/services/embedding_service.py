@@ -24,6 +24,8 @@ from app.core.exceptions import EmbeddingServiceError
 _client: AsyncOpenAI | None = None
 
 
+import httpx
+
 def _get_client() -> AsyncOpenAI:
     """获取异步 OpenAI 客户端单例。"""
     global _client
@@ -31,6 +33,7 @@ def _get_client() -> AsyncOpenAI:
         _client = AsyncOpenAI(
             api_key=settings.dashscope_api_key,
             base_url=settings.llm_base_url,
+            timeout=httpx.Timeout(60.0, connect=10.0),
         )
     return _client
 

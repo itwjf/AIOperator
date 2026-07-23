@@ -130,7 +130,7 @@ async def _get_agent():
         _agent = create_agent(
             llm,
             tools=all_tools,
-            checkpointer=get_checkpointer("mcp"),
+            checkpointer=await get_checkpointer("mcp"),
             system_prompt=SYSTEM_PROMPT,
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )

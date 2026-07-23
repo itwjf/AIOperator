@@ -52,27 +52,23 @@ SYSTEM_PROMPT = """你是一个智能运维助手，专门帮助运维工程师�
 """
 
 
-def _get_agent():
+async def _get_agent():
     """获取 Agent 单例 — 首次调用时初始化。
 
     初始化做了什么？
       1. 创建 LLM 实例（temperature=0.7，适合对话）
       2. 注册知识检索工具
-      3. 挂载 SqliteSaver（用于会话记忆，持久化到文件）
+      3. 挂载 AsyncSqliteSaver（用于会话记忆，持久化到文件）
       4. 注入 system_prompt（定义 Agent 行为）
     """
     global _agent
     if _agent is None:
         llm = create_llm(temperature=0.7, streaming=True)
 
-                # create_agent 会自动根据 system_prompt 和工具定义，构建一个能自动规划调用工具的 Agent。
-                # 封装了 LangGraph 的 StateGraph + ToolNodes，开发者只需提供 LLM、工具和提示词。
-                # Agent 内部会根据用户输入和对话历史，自动判断是否需要调用工具，并处理工具调用的结果。
-                # 例如，用户问了一个技术问题，Agent 会判断需要查知识库，就自动调用 retrieve_knowledge 工具，拿到文档后再生成回答。
         _agent = create_agent(
             llm,                        # 语言模型
             tools=[retrieve_knowledge, calculate, execute_shell], # 工具列表
-            checkpointer=get_checkpointer("rag"), # 记忆（会话持久化，SQLite）
+            checkpointer=await get_checkpointer("rag"), # 记忆（会话持久化，SQLite）
             system_prompt=SYSTEM_PROMPT, # 行为准则 系统提示词
             middleware=[MessageTrimmerMiddleware(settings.max_chat_messages)],
         )
@@ -98,7 +94,7 @@ async def query(question: str, session_id: str = "default") -> str:
         Agent 的最终回答文本
     """
     try:
-        agent = _get_agent()
+        agent = await _get_agent()
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=question)]},
             config={"configurable": {"thread_id": session_id}},
@@ -127,7 +123,7 @@ async def query_stream(question: str, session_id: str = "default"):
       {"type": "done"}                           — 对话结束
       {"type": "error", "data": "错误信息"}      — 出错
     """
-    agent = _get_agent()
+    agent = await _get_agent()
 
     try:
         # stream_mode="messages" 返回 (message_chunk, metadata) 元组

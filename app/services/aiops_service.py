@@ -103,7 +103,7 @@ async def _run_reporter(state: dict) -> dict:
     return {"response": response.content}
 
 
-def _build_graph():
+async def _build_graph():
     """构建 Plan-Execute-Replan 工作流图。
 
     步骤：
@@ -140,13 +140,13 @@ def _build_graph():
 
     graph.add_edge("reporter", END)
 
-    return graph.compile(checkpointer=get_checkpointer("aiops"))
+    return graph.compile(checkpointer=await get_checkpointer("aiops"))
 
 
-def _get_graph():
+async def _get_graph():
     global _graph
     if _graph is None:
-        _graph = _build_graph()
+        _graph = await _build_graph()
     return _graph
 
 
@@ -167,7 +167,7 @@ async def diagnose(session_id: str = "default"):
       {"type": "done"}
       {"type": "error", "data": "错误信息"}
     """
-    graph = _get_graph()
+    graph = await _get_graph()
     initial_state = {"input": DIAGNOSE_TEMPLATE}
     config = {"configurable": {"thread_id": session_id}}
 

@@ -125,7 +125,6 @@ Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透
 | SPEC 文档 | 状态 | 进度 | 说明 |
 |-----------|:----:|:----:|------|
 | [SPEC_TOOLS.md](SPEC_TOOLS.md) | ✅ **已完成** | 100% | 3 类 10 个新工具全部开发完成 |
-| [SPEC_OBSERVABILITY.md](SPEC_OBSERVABILITY.md) | ⏳ **待开发** | 0% | LangFuse 可观测性系统，尚未开始 |
 
 <details>
 <summary><b>SPEC_TOOLS.md — 已完成详情（点击展开）</b></summary>

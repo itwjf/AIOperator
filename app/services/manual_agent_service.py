@@ -91,7 +91,7 @@ class AgentState(TypedDict):
 
 
 # === 构建 Agent 图 ===
-def _build_graph():
+async def _build_graph():
     """手动搭建 Agent 工作流图。
 
     这是 create_agent 的等价替代，逐步展示内部构造：
@@ -163,13 +163,13 @@ def _build_graph():
     graph.add_edge("tools", "agent")  # tools 执行完 → 回到 agent 再判断
 
     # 编译时注入 checkpointer，所有 state 变更自动持久化
-    return graph.compile(checkpointer=get_checkpointer("manual"))
+    return graph.compile(checkpointer=await get_checkpointer("manual"))
 
 
-def _get_graph():
+async def _get_graph():
     global _graph
     if _graph is None:
-        _graph = _build_graph()
+        _graph = await _build_graph()
     return _graph
 
 
@@ -185,7 +185,7 @@ async def chat(question: str, session_id: str = "default") -> str:
         → 最终返回完整消息列表
     """
     try:
-        graph = _get_graph()
+        graph = await _get_graph()
         result = await graph.ainvoke(
             {"messages": [HumanMessage(content=question)]},
             config={"configurable": {"thread_id": session_id}},
@@ -204,7 +204,7 @@ async def chat_stream(question: str, session_id: str = "default"):
       这里用 graph.astream() 替代 agent.astream()，
       底层原理完全一样，只是图是自己手动搭的。
     """
-    graph = _get_graph()
+    graph = await _get_graph()
 
     try:
         async for chunk, metadata in graph.astream(

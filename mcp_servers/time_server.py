@@ -61,7 +61,7 @@ def get_current_time(timezone_name: str = "Asia/Shanghai") -> str:
 
     now = datetime.now(tz)
     label = TIMEZONE_MAP.get(timezone_name, timezone_name)
-    return now.strftime(f"%Y-%m-%d %H:%M:%S ({label})")
+    return now.strftime(f"%Y-%m-%d %A %H:%M:%S ({label})")
 
 
 # 启动入口

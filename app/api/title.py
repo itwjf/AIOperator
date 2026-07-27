@@ -7,10 +7,11 @@
     → 返回 {"title": "浓缩标题"}
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.core.llm_factory import create_llm
+from app.core.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/title", tags=["title"])
 
@@ -25,7 +26,7 @@ class TitleRequest(BaseModel):
 
 
 @router.post("/summarize")
-async def summarize(req: TitleRequest):
+async def summarize(req: TitleRequest, current_user: dict = Depends(get_current_user)):
     """将对话内容浓缩为 3-8 字中文标题。
 
     使用与主对话相同的 LLM 配置，temperature=0.3 保证稳定输出。

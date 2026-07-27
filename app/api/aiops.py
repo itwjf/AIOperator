@@ -9,11 +9,12 @@ POST /api/aiops
 """
 
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.services.aiops_service import diagnose
+from app.core.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api", tags=["aiops"])
 
@@ -26,7 +27,7 @@ class AIOpsRequest(BaseModel):
 
 
 @router.post("/aiops")
-async def aiops_diagnose(req: AIOpsRequest):
+async def aiops_diagnose(req: AIOpsRequest, current_user: dict = Depends(get_current_user)):
     """启动 AIOps 智能诊断。
 
     SSE 事件类型：
@@ -53,7 +54,8 @@ async def aiops_diagnose(req: AIOpsRequest):
     """
 
     async def event_generator():
-        async for event in diagnose(req.session_id):
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        async for event in diagnose(thread_id):
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),

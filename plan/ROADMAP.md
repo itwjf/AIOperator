@@ -1,8 +1,8 @@
 # AIOperator 多用户化改进方案
 
-> 版本：v1.0  
-> 日期：2026-07-24  
-> 作者：架构规划（AI 辅助）  
+> 版本：v2.0
+> 日期：2026-07-27
+> 作者：架构规划（AI 辅助）
 > 状态：待评审
 
 ---
@@ -10,7 +10,7 @@
 ## 目录
 
 - [一、现状分析](#一现状分析)
-- [二、第三方 OAuth 方案科普](#二第三方-oauth-方案科普)
+- [二、GitHub OAuth 方案](#二github-oauth-方案)
 - [三、技术选型](#三技术选型)
 - [四、架构方案](#四架构方案)
 - [五、安全方案（重点）](#五安全方案重点)
@@ -56,9 +56,10 @@ FastAPI :9900
 | 5 | **20 条消息截断硬编码** — 按条数而非 token 数裁剪，体验不好 | P1 | 用户体验 |
 | 6 | **前端单文件 2200+ 行** — 无模块化，后续功能迭代困难 | P1 | 可维护性 |
 | 7 | **无流控** — 无 rate limit，无请求队列，多用户并发会打穿 LLM API | P1 | 稳定性 |
-| 8 | **无测试** — 虽然配了 pytest 但没有实际用例 | P2 | 质量 |
-| 9 | **日志非结构化** — 字符串拼接，不方便接入日志平台 | P2 | 运维 |
-| 10 | **无多环境配置** — dev/staging/prod 混在 .env | P2 | 工程化 |
+| 8 | **无可观测性** — Agent 调用链、工具调用、Token 用量全黑盒，排查问题靠猜 | P0 | 运维 |
+| 9 | **无测试** — 虽然配了 pytest 但没有实际用例 | P2 | 质量 |
+| 10 | **日志非结构化** — 字符串拼接，不方便接入日志平台 | P2 | 运维 |
+| 11 | **无多环境配置** — dev/staging/prod 混在 .env | P2 | 工程化 |
 
 ### 1.3 现有可用资产
 
@@ -72,15 +73,15 @@ FastAPI :9900
 
 ---
 
-## 二、第三方 OAuth 方案科普
+## 二、GitHub OAuth 方案
 
 ### 2.1 什么是 OAuth
 
-OAuth 2.0 是一种**授权协议**，允许用户在不暴露密码的情况下，授权第三方应用访问自己在某个平台（如 GitHub、微信）上的身份信息。
+OAuth 2.0 是一种**授权协议**，允许用户在不暴露密码的情况下，授权第三方应用访问自己在某个平台（如 GitHub）上的身份信息。
 
 通俗类比：你去酒店入住，前台不需要你的身份证密码，而是让公安系统发一个临时凭证，证明"这人确实是他本人"。
 
-### 2.2 工作流程（以 GitHub OAuth 为例）
+### 2.2 工作流程（GitHub OAuth）
 
 ```
 用户                        AIOperator                      GitHub
@@ -105,32 +106,34 @@ OAuth 2.0 是一种**授权协议**，允许用户在不暴露密码的情况下
  │<─────────────────────────────│                              │
 ```
 
-### 2.3 三种方案对比
+### 2.3 为什么只用 GitHub OAuth
 
-| 方案 | 用户体验 | 开发成本 | 适用场景 |
-|------|:--:|:--:|------|
-| **纯密码登录**（邮箱+密码） | 需注册，一般 | 低 | 内部系统、小团队 |
-| **GitHub OAuth** | 一键登录，好 | 中 | 面向开发者产品 |
-| **微信 OAuth** | 扫码登录，国内用户友好 | 高（需企业认证） | 面向大众产品 |
-| **OAuth + 密码双模式** | 两个入口，最好 | 中高 | 通用产品 |
+| 考量 | 决策 |
+|------|------|
+| **用户群** | 本项目面向开发者/运维工程师，GitHub 账号人手一个 |
+| **开发成本** | 不需要开发注册页、密码重置、邮箱验证等功能 |
+| **安全性** | 不存储密码 → 没有密码泄露风险。登录安全由 GitHub 保障（2FA、异常检测） |
+| **维护成本** | 不维护密码策略（强度、过期、重置），零运维负担 |
+| **免费** | GitHub OAuth App 完全免费，无需企业认证 |
 
-### 2.4 本项目的推荐策略
+### 2.4 users 表设计
 
-**短期（阶段一）**：纯密码登录（邮箱 + bcrypt 加密密码 + JWT Token），开发成本最低。
-
-**中期（阶段二）**：增加 GitHub OAuth，技术用户一键登录。
-
-**长期**：可扩展微信扫码登录（需要微信开放平台企业资质）。
-
-双模式不互斥，可以用同一张 `users` 表，通过 `auth_provider` 字段区分：
+用户信息从 GitHub API 获取并存储：
 
 ```
 users 表:
-  id, username, email, password_hash (可为 NULL), 
-  auth_provider (local / github / wechat),
-  provider_user_id (可为 NULL),  -- OAuth 平台的用户 ID
-  avatar_url, created_at, last_login_at
+  id              INT PK AUTO_INCREMENT
+  username        VARCHAR(100)    — GitHub 用户名（login）
+  email           VARCHAR(200)    — GitHub 主邮箱（唯一）
+  github_id       INT UNIQUE      — GitHub 用户数字 ID
+  avatar_url      VARCHAR(500)    — GitHub 头像 URL
+  access_token    VARCHAR(255)    — GitHub access_token（加密存储）
+  is_active       BOOLEAN         — 管理员可禁用用户
+  created_at      DATETIME        — 首次登录时间
+  last_login_at   DATETIME        — 最近登录时间
 ```
+
+> JWT 仍然用于前后端之间的会话保持。GitHub access_token 仅在 callback 阶段获取一次，用于查用户信息，不用于后续 API 认证。后续 API 认证一律用 JWT。
 
 ---
 
@@ -140,19 +143,25 @@ users 表:
 
 | 层 | 选型 | 理由 |
 |----|------|------|
-| **认证** | JWT (python-jose) + bcrypt (passlib) | 无状态、轻量、无需 Redis |
-| **OAuth** | GitHub OAuth App (httpx 对接) | 免费、无需企业认证、面向开发者 |
+| **认证** | GitHub OAuth + JWT (PyJWT) | GitHub 账号认证，JWT 无状态会话 |
 | **用户存储** | MySQL `users` 表 | 复用现有 MySQL，减少组件 |
 | **会话存储** | MySQL 替换 SQLite | 统一数据源、支持按 user_id 查询 |
 | **前端** | 保持 Vue 3 CDN + 拆模块为多个 JS 文件 | 不引入构建工具，保持简单 |
 | **API 鉴权** | FastAPI Depends + 中间件注入 `current_user` | FastAPI 原生依赖注入 |
 | **MCP 安全** | 共享 Secret Token（.env 配置） | 内网部署足够，不引入 mTLS 复杂度 |
+| **可观测性** | **LangSmith**（LangChain 官方平台） | 自动追踪 Agent 调用链、工具调用、Token 用量、延迟 |
 | **流控** | slowapi (基于 Flask-Limiter 的 FastAPI 版) | 轻量、内存存储、单机够用 |
 | **日志** | loguru → 结构化 JSON 输出 | 不换库，只改 format |
 | **配置** | pydantic-settings .env 多文件 | 不引入新工具 |
 | **测试** | pytest + pytest-asyncio (已有) | 不增加新依赖 |
 
 ### 3.2 选型理由详述
+
+**为什么用 GitHub OAuth 而不是密码登录？**
+- 目标用户是开发者，人人都有 GitHub 账号
+- 不存储密码 → 不存在密码泄露、暴力破解等安全风险
+- 开发量少（不需要注册页、密码重置、邮箱验证）
+- 运营成本低（不需要处理"忘记密码"工单）
 
 **为什么用 MySQL 替换 SQLite 存会话？**
 - 你已有 MySQL，不需要新组件
@@ -165,6 +174,13 @@ users 表:
 - JWT 无状态，不需要服务端存 session
 - 引入新组件增加运维复杂度
 - 等日活用户破百再考虑
+
+**为什么引入 LangSmith？**
+- 当前 Agent 调用链完全黑盒：LLM 调了几次、每次用了多少 Token、工具调用耗时多少、哪步出了错——全部不知道
+- LangSmith 是 LangChain 官方可观测性平台，和 LangGraph/LangChain 零摩擦集成
+- 免费额度够用（3000 trace/月），个人项目不计成本
+- 接入只需要 3 个环境变量，不改代码
+- 提供 Trace 可视化、Token 统计、工具调用时序图、错误定位
 
 **为什么 MCP Server 用共享 Secret 而不是 OAuth2 Proxy？**
 - 5 个 MCP Server 按微服务部署在同一 Docker 网络内（或同一台机器）
@@ -181,8 +197,8 @@ users 表:
 ┌─────────────────────────────────────────────────────┐
 │                   前端 (Vue 3 CDN)                    │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │ login.js │  │ app.js   │  │ chat/aiops/mcp/  │  │
-│  │ 登录/注册 │  │ 主逻辑   │  │ upload/*.js      │  │
+│  │ auth.js  │  │ app.js   │  │ chat/aiops/mcp/  │  │
+│  │ GitHub登录│  │ 主逻辑   │  │ upload/*.js      │  │
 │  └──────────┘  └──────────┘  └──────────────────┘  │
 │                        │                             │
 │         Authorization: Bearer <JWT>                  │
@@ -200,7 +216,7 @@ users 表:
 │                                                       │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐  │
 │  │ /api/auth│ │/api/chat │ │/api/agent│ │/api/   │  │
-│  │ 登录注册  │ │          │ │          │ │ mcp等  │  │
+│  │ GitHub OAuth│          │ │          │ │ mcp等  │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───┬────┘  │
 │       │             │             │            │      │
 │       │     thread_id = f"{user_id}:{session_id}"     │
@@ -221,6 +237,11 @@ users 表:
 │  │         Rate Limiter (slowapi)                    │  │
 │  │  /api/auth/*  → 10次/分钟 (防暴力破解)            │  │
 │  │  /api/chat/*  → 30次/分钟/用户                    │  │
+│  └──────────────────────────────────────────────────┘  │
+│                                                       │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │         LangSmith Tracing                        │  │
+│  │  Agent 调用链、工具调用、Token 用量全量追踪       │  │
 │  └──────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
                          │
@@ -264,11 +285,12 @@ config = {"configurable": {"thread_id": f"{user_id}:{session_id}"}}
 ```
 static/
 ├── index.html
+├── login.html
 ├── css/
 │   └── styles.css
 ├── js/
 │   ├── config.js        # API 地址、常量
-│   ├── auth.js           # 登录/注册/Token 管理
+│   ├── auth.js           # GitHub 登录 / Token 管理
 │   ├── api.js            # HTTP 封装 (fetch + JWT 自动注入)
 │   ├── components/
 │   │   ├── chat.js       # 聊天组件
@@ -285,15 +307,16 @@ static/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INT PK AUTO_INCREMENT | 用户ID |
-| username | VARCHAR(50) UNIQUE | 用户名 |
-| email | VARCHAR(100) UNIQUE | 邮箱（登录凭据） |
-| password_hash | VARCHAR(255) | bcrypt 哈希后的密码 |
-| auth_provider | ENUM('local','github') | 认证来源 |
-| provider_user_id | VARCHAR(100) | OAuth 平台用户ID |
-| avatar_url | VARCHAR(500) | 头像地址 |
-| is_active | BOOLEAN | 是否启用 |
-| created_at | DATETIME | 注册时间 |
-| last_login_at | DATETIME | 最后登录时间 |
+| username | VARCHAR(100) NOT NULL | GitHub 用户名（login） |
+| email | VARCHAR(200) | GitHub 公开邮箱（可选） |
+| github_id | INT UNIQUE NOT NULL | GitHub 用户数字 ID |
+| avatar_url | VARCHAR(500) | GitHub 头像 URL |
+| access_token | VARCHAR(255) | GitHub access_token（可选，加密存储） |
+| is_active | BOOLEAN DEFAULT TRUE | 管理员可禁用 |
+| created_at | DATETIME | 首次登录时间 |
+| last_login_at | DATETIME | 最近登录时间 |
+
+> 注意：不存储密码。认证全部委托给 GitHub，本项目只存储 GitHub 用户标识用于关联会话数据。
 
 **sessions 表**（新增）
 
@@ -322,21 +345,19 @@ static/
 
 **checkpoint 迁移**
 
-当前 SQLite `data/checkpoints_{agent}.db` → MySQL `checkpoint_rag` / `checkpoint_mcp` / `checkpoint_manual` / `checkpoint_aiops` 四张表。LangGraph 的 `AsyncSqliteSaver` 替换为 `AsyncMySqlSaver`（或使用 LangGraph 官方 `PostgresSaver` 的 MySQL 适配版）。
-
-> 备用方案：继续用 SQLite（每个用户一个 db 文件），MySQL 只存 users + sessions + messages。这是更简单的方案，且不会引入 LangGraph MySQL saver 的兼容问题。两种方案在开发阶段一末尾评估。
+当前 SQLite `data/checkpoints_{agent}.db` → 继续使用 SQLite（每 Agent 独立文件）。由于 thread_id 已拼接 user_id 前缀（`f"{user_id}:{session_id}"`），不同用户的会话数据天然隔离在同一个 SQLite 文件中，不需要迁移到 MySQL。
 
 ---
 
 ## 五、安全方案（重点）
 
-### 5.1 用户密码安全
+### 5.1 认证安全
 
-- 密码哈希：bcrypt (passlib)，cost factor = 12
-- 密码规则：≥ 8 位，包含字母 + 数字
-- 登录失败限制：同一邮箱 5 次失败后锁定 15 分钟（在 users 表加 `failed_attempts` + `locked_until` 字段）
-- JWT 过期：access_token 24 小时，可选 refresh_token 7 天
-- JWT secret：64 字节随机字符串，存在 `.env` 的 `JWT_SECRET_KEY`
+- **身份认证**：委托 GitHub OAuth，信任 GitHub 的身份验证体系（含 2FA、异常登录检测）
+- **会话保持**：JWT access_token，24 小时过期
+- **JWT secret**：64 字节随机字符串，存在 `.env` 的 `JWT_SECRET_KEY`
+- **GitHub access_token 处理**：仅在 OAuth callback 阶段使用（查用户信息），使用后不存储或加密存储（AES），不用于后续 API 请求认证
+- **CSRF 防护**：OAuth callback 使用 `state` 参数防 CSRF（随机字符串，存 session，回调时验证）
 
 ### 5.2 API 鉴权流程
 
@@ -362,7 +383,7 @@ static/
         └── request.state.current_user = user → 进入业务逻辑
 ```
 
-路由白名单：`/health`, `/docs`, `/openapi.json`, `/static`, `/api/auth/login`, `/api/auth/register`
+路由白名单：`/health`, `/docs`, `/openapi.json`, `/static`, `/api/auth/github/login`, `/api/auth/github/callback`
 
 ### 5.3 MCP Server 安全加固
 
@@ -375,9 +396,9 @@ static/
   .env 中新增 MCP_SECRET_TOKEN=<64字节随机字符串>
 
 请求链：
-  main.py 启动 → 读 MCP_SECRET_TOKEN 
+  main.py 启动 → 读 MCP_SECRET_TOKEN
   mcp_server 启动 → 读 MCP_SECRET_TOKEN
-  
+
   外部直接访问 :8004/mcp → Request header 无 Token → 403
   main.py → MCP Client → 自动注入 Token → 200
 ```
@@ -435,28 +456,32 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
 
 ## 六、开发阶段计划
 
-### 阶段一：用户认证体系（预计 2-3 天）
+### 阶段一：GitHub OAuth 认证体系（预计 2 天）
 
-**范围**：打通从登录到 API 鉴权的完整链路
+**范围**：打通从 GitHub 登录到 API 鉴权的完整链路
 
 **任务清单**：
 
-- [ ] 1.1 MySQL 新增 `users` 表，执行建表 DDL
-- [ ] 1.2 `app/config.py` 新增配置项：`JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_HOURS`, `BCRYPT_ROUNDS`
-- [ ] 1.3 `app/core/security.py` — JWT 生成/验证 + bcrypt 密码哈希/验证
-- [ ] 1.4 `app/api/auth.py` — `/api/auth/register`（注册）、`/api/auth/login`（登录）、`/api/auth/me`（获取当前用户信息）
-- [ ] 1.5 `app/core/auth_middleware.py` — 请求中间件，验证 JWT 并注入 `current_user`
-- [ ] 1.6 四个 Agent API 的 `session_id` → `thread_id` 改造（拼接 user_id 前缀）
-- [ ] 1.7 前端 `static/js/auth.js` — 登录/注册页面 + Token 管理（`localStorage` 存 JWT）
-- [ ] 1.8 前端 `static/js/api.js` — 全局 `fetch` 封装，自动注入 `Authorization` header，401 时跳转登录页
-- [ ] 1.9 手动测试：注册 → 登录 → 创建会话 → 切换会话 → 另一个浏览器登录看不到别人的会话
+- [ ] 1.1 在 GitHub 注册 OAuth App，获取 Client ID / Secret
+- [ ] 1.2 MySQL 新增 `users` 表，执行建表 DDL
+- [ ] 1.3 `app/config.py` 新增配置项：`JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_HOURS`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`, 以及 MySQL 连接配置
+- [ ] 1.4 `app/core/security.py` — JWT 生成/验证
+- [ ] 1.5 `app/api/auth.py` — `GET /api/auth/github/login`（重定向到 GitHub 授权页）、`GET /api/auth/github/callback`（处理回调：换 token → 查用户 → 创建/查找用户 → 签发 JWT）、`GET /api/auth/me`（获取当前用户信息）
+- [ ] 1.6 `app/core/auth_middleware.py` — Depends 依赖注入，验证 JWT 并注入 `current_user`
+- [ ] 1.7 四个 Agent API 的 `session_id` → `thread_id` 改造（拼接 user_id 前缀）
+- [ ] 1.8 `app/core/db.py` — MySQL 连接工具（统一获取 pymysql 连接）
+- [ ] 1.9 前端登录页：只有"使用 GitHub 登录"一个按钮，点击跳转 GitHub 授权页
+- [ ] 1.10 前端 `static/js/api.js` — 全局 `fetch` 封装，自动注入 `Authorization` header，401 处理
+- [ ] 1.11 前端 `static/js/auth.js` — Token 管理（存 localStorage，解析 URL 参数中的 token 并存储）
+- [ ] 1.12 手动测试：点击登录 → GitHub 授权 → 回调 → 自动登录 → 创建会话 → 切换会话 → 另一个浏览器登录能看到自己的会话且看不到别人的
 
 **产出物**：
 - `app/core/security.py`
 - `app/core/auth_middleware.py`
+- `app/core/db.py`
 - `app/api/auth.py`
-- `static/js/auth.js`, `static/js/api.js`
-- 数据库 DDL: `users` 表
+- `static/js/auth.js`, `static/js/api.js`, `static/login.html`
+- `migrations/001_create_users.sql`
 
 ---
 
@@ -547,20 +572,29 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
 
 ---
 
-### 阶段六：GitHub OAuth 登录（预计 1 天）
+### 阶段六：LangSmith 可观测性集成（预计 0.5 天）
 
-**范围**：在密码登录基础上增加 GitHub OAuth 入口
+**范围**：接入 LangSmith 平台，实现 Agent 调用链全量追踪
+
+**LangSmith 是什么？**
+LangChain 官方出品的 LLM 可观测性平台。自动记录每一次 LLM 调用、工具调用、Agent 决策的完整链路，包含：
+- **Trace 视图**：每一步的输入/输出、耗时、Token 用量
+- **工具调用时序图**：Agent 调了哪些工具、顺序、耗时
+- **错误定位**：哪一步失败、失败原因、堆栈
+- **成本统计**：每次对话消耗的 Token 数和大致费用
 
 **任务清单**：
 
-- [ ] 6.1 `app/config.py` 新增 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`
-- [ ] 6.2 `app/api/auth.py` 新增 `/api/auth/github/login`（重定向到 GitHub 授权页）、`/api/auth/github/callback`（处理回调）
-- [ ] 6.3 前端登录页增加「使用 GitHub 登录」按钮
-- [ ] 6.4 GitHub OAuth App 注册指南写到 README
+- [ ] 6.1 在 [smith.langchain.com](https://smith.langchain.com) 注册账号，创建项目，获取 API Key
+- [ ] 6.2 `app/config.py` 新增 `LANGCHAIN_TRACING_V2`, `LANGCHAIN_ENDPOINT`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT` 配置项
+- [ ] 6.3 更新 `.env.example` 加 LangSmith 配置
+- [ ] 6.4 设置环境变量启用追踪（LangChain 自动识别这些环境变量，零代码改动）
+- [ ] 6.5 验证：对话一次 → LangSmith Dashboard 看到完整 Trace（LLM 调用 → 工具调用 → 最终输出）
+- [ ] 6.6 （可选）在 LangSmith 中创建 Dataset + 评估规则，做回归测试
 
 **产出物**：
-- GitHub OAuth API 端点
-- 前端 GitHub 登录按钮
+- LangSmith 配置项
+- Trace 仪表盘截图（验证通过标志）
 
 ---
 
@@ -574,15 +608,15 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
 - [ ] 7.2 `app/core/config.py` 支持 `APP_ENV` 环境变量切换配置文件
 - [ ] 7.3 结构化日志：loguru 输出 JSON 格式（保留控制台彩色输出）
 - [ ] 7.4 `tests/` 目录补充：
-  - `tests/test_security.py` — JWT 生成/验证 + bcrypt 哈希
-  - `tests/test_auth.py` — 注册/登录 API 测试
+  - `tests/test_security.py` — JWT 生成/验证
+  - `tests/test_auth.py` — GitHub OAuth 回调模拟测试
   - `tests/test_session.py` — 会话隔离测试（用户A查不到用户B的会话）
 - [ ] 7.5 DB Server 审计日志：所有 SQL 查询记录到 JSON 日志文件
 
 **产出物**：
 - 多环境配置
 - JSON 日志格式
-- 测试用例（至少覆盖认证 + 会话隔离）
+- 测试用例（至少覆盖 JWT + 会话隔离）
 
 ---
 
@@ -592,11 +626,14 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
 
 | 风险 | 等级 | 缓解措施 |
 |------|:--:|------|
+| GitHub OAuth API 限流 | 低 | 每小时 5000 次请求，个人使用完全够 |
+| GitHub OAuth App 审批 | 低 | 个人项目无需审批，直接可用 |
 | LangGraph MySQLSaver 无官方支持 | 中 | 阶段性评估，备选继续 SQLite（每用户一个文件） |
 | `langchain.agents.create_agent` API 变更 | 中 | 已在全局用 `0.3.x` 锁定版本，不随意升级 |
 | 前端 ES Module 在 CDN Vue 3 环境下的兼容性 | 低 | Vue 3 CDN 版支持 ES Module，已验证 |
 | JWT secret 泄露 | 低 | 64 字节随机生成，仅存在 `.env`，不提交 git |
 | MCP Server Token 泄露 | 低 | 仅 Docker 内网可达，Token 存在 `.env` |
+| LangSmith 免费额度不够 | 低 | 3000 trace/月，个人项目足够；超出可自建 tracing |
 
 ### 7.2 开发注意事项
 
@@ -608,7 +645,7 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
 
 ### 7.3 如果只能做一件事
 
-如果时间极度有限，**只做阶段一（用户认证）**。它提供的价值最大——至少有了用户区分，每个人只能看到自己的对话。其他问题（存储零散、前端混乱）可以慢慢迭代。
+如果时间极度有限，**只做阶段一（GitHub OAuth 认证）**。它提供的价值最大——至少有了用户区分，每个人只能看到自己的对话。其他问题（存储零散、前端混乱）可以慢慢迭代。
 
 ---
 
@@ -618,14 +655,16 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
 
 ```
 新增文件：
-  app/core/security.py           # JWT + bcrypt
-  app/core/auth_middleware.py    # 请求鉴权中间件
+  app/core/security.py           # JWT 生成/验证
+  app/core/auth_middleware.py    # 请求鉴权依赖注入
+  app/core/db.py                 # MySQL 连接工具
   app/core/rate_limiter.py       # 流控
-  app/api/auth.py                # 注册/登录 API
+  app/api/auth.py                # GitHub OAuth / 用户信息 API
   app/api/session.py             # 会话管理 API
   app/services/session_service.py # 会话 CRUD
   app/services/message_service.py # 消息存取
   app/services/llm_guard.py      # LLM 请求队列
+  static/login.html              # GitHub 登录页面
   static/js/config.js            # 前端配置
   static/js/api.js               # 前端 HTTP 封装
   static/js/auth.js              # 前端登录模块
@@ -639,13 +678,14 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
   tests/test_session.py
 
 修改文件：
-  app/config.py                  # +JWT/OAuth/MCP_SECRET 配置项
-  app/main.py                    # +Auth 中间件 + Rate limiter
-  app/api/chat.py                # thread_id 拼接 user_id
+  app/config.py                  # +JWT/GitHub OAuth/MCP_SECRET/DB/LangSmith 配置项
+  app/main.py                    # +Auth 路由 + Rate limiter
+  app/api/chat.py                # thread_id 拼接 user_id + 认证依赖
   app/api/agent.py               # 同上
   app/api/mcp.py                 # 同上
   app/api/aiops.py               # 同上
-  app/services/rag_agent_service.py    # 同上
+  app/api/file.py                # 同上
+  app/services/rag_agent_service.py    # +可选：user_id 感知（日志用）
   app/services/manual_agent_service.py # 同上
   app/services/mcp_agent_service.py    # 同上
   app/services/aiops_service.py        # 同上
@@ -656,8 +696,8 @@ DB Server 中所有 SQL 查询记录审计日志（JSON 格式），记录时间
   mcp_servers/docker_server.py   # +Token 校验
   mcp_servers/search_server.py   # +Token 校验
   docker-compose.yml             # -MCP 宿主机端口映射
-  pyproject.toml                 # +slowapi 依赖
+  pyproject.toml                 # +pyjwt, slowapi
   .env.example                   # +新增环境变量
-  static/index.html              # <script> 引入调整
+  static/index.html              # <script> 引入调整 + 登录检查
   static/app.js                  # 拆分后变瘦，只留主入口
 ```

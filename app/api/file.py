@@ -7,7 +7,7 @@
 """
 
 import os
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from app.services.document_splitter import MarkdownSplitter
 from app.services.vector_store_manager import add_documents, delete_by_source
 from app.core.logger import logger
@@ -17,6 +17,7 @@ from app.core.exceptions import (
     VectorDBError,
     EmbeddingServiceError,
 )
+from app.core.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api", tags=["file"])
 
@@ -28,7 +29,7 @@ ALLOWED_EXTENSIONS = {".md", ".txt"}
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """上传 Markdown 或文本文件到知识库。
 
     处理流程：

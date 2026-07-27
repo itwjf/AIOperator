@@ -12,12 +12,13 @@ MCP API — 展示 MCP 远程工具 + 本地工具的协作。
 """
 
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.chat import ChatRequest
 from app.services.mcp_agent_service import chat, chat_stream, get_all_tools_info
 from app.core.exceptions import AIOperatorException
+from app.core.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
@@ -29,10 +30,11 @@ async def list_tools():
 
 
 @router.post("/chat")
-async def mcp_chat(req: ChatRequest):
+async def mcp_chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话 — 使用本地 + MCP 远程工具。"""
     try:
-        answer = await chat(req.question, req.session_id)
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        answer = await chat(req.question, thread_id)
         return {"answer": answer}
     except AIOperatorException as e:
         raise HTTPException(status_code=503, detail=e.message)
@@ -41,11 +43,12 @@ async def mcp_chat(req: ChatRequest):
 
 
 @router.post("/chat_stream")
-async def mcp_chat_stream(req: ChatRequest):
+async def mcp_chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话 — 使用本地 + MCP 远程工具。"""
 
     async def event_generator():
-        async for event in chat_stream(req.question, req.session_id):
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        async for event in chat_stream(req.question, thread_id):
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),

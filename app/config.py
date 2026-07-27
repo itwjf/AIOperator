@@ -53,6 +53,32 @@ class Settings(BaseSettings):
     shell_timeout: int = 30       # 命令执行超时（秒）
     shell_max_output: int = 5000  # 输出截断字符数
 
+    # ---- 数据库配置（MySQL）----
+    db_host: str = "127.0.0.1"
+    db_port: int = 3306
+    db_user: str = "root"
+    db_password: str = ""
+    db_name: str = "aioperator"
+
+    # ---- 认证配置 ----
+    jwt_secret_key: str = ""          # JWT 签名密钥（64 字节随机字符串）
+    jwt_algorithm: str = "HS256"      # JWT 签名算法
+    jwt_expire_hours: int = 24        # access_token 过期时间（小时）
+
+    # ---- GitHub OAuth 配置 ----
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_redirect_uri: str = "http://127.0.0.1:9900/api/auth/github/callback"
+
+    # ---- MCP 安全配置 ----
+    mcp_secret_token: str = ""
+
+    # ---- LangSmith 可观测性 ----
+    langchain_tracing_v2: bool = False
+    langchain_endpoint: str = "https://api.smith.langchain.com"
+    langchain_api_key: str = ""
+    langchain_project: str = "aioperator"
+
     # ---- 对话历史持久化（Checkpointer）----
     # SQLite 文件存放目录；Docker 部署时挂载到 volume，保证重启不丢
     checkpoint_dir: str = "data"

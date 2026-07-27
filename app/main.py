@@ -18,6 +18,15 @@ from app.core.logger import setup_logger, logger
 # 必须在创建 app 之前调用，确保所有后续模块都能正常使用 logger
 setup_logger(log_level=settings.log_level, log_dir=settings.log_dir)
 
+# === 启用 LangSmith 追踪 ===
+if settings.langchain_tracing_v2 and settings.langchain_api_key:
+    import os
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
+    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
+    logger.info("LangSmith 追踪已启用 — 项目: {}", settings.langchain_project)
+
 # === 创建 FastAPI 应用实例 ===
 # title/version 会显示在 Swagger 文档页（/docs）的顶部
 app = FastAPI(
@@ -61,6 +70,7 @@ from app.api.agent import router as agent_router
 from app.api.aiops import router as aiops_router
 from app.api.mcp import router as mcp_router
 from app.api.title import router as title_router
+from app.api.auth import router as auth_router
 
 app.include_router(chat_router)
 app.include_router(file_router)
@@ -68,6 +78,7 @@ app.include_router(agent_router)
 app.include_router(aiops_router)
 app.include_router(mcp_router)
 app.include_router(title_router)
+app.include_router(auth_router)
 
 
 # === 静态文件（前端页面）===

@@ -9,25 +9,27 @@ Agent API — 使用手动搭建的 Agent 图（非 create_agent）。
 """
 
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.chat import ChatRequest  # 复用同一个请求模型
 from app.services.manual_agent_service import chat, chat_stream
 from app.core.exceptions import AIOperatorException
+from app.core.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
 @router.post("/chat")
-async def agent_chat(req: ChatRequest):
+async def agent_chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话 — 手动 Agent 图版本。
 
     内部用 StateGraph + ToolNode + bind_tools 实现，
     和 create_agent 功能等价但结构透明。
     """
     try:
-        answer = await chat(req.question, req.session_id)
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        answer = await chat(req.question, thread_id)
         return {"answer": answer}
     except AIOperatorException as e:
         raise HTTPException(status_code=503, detail=e.message)
@@ -36,7 +38,7 @@ async def agent_chat(req: ChatRequest):
 
 
 @router.post("/chat_stream")
-async def agent_chat_stream(req: ChatRequest):
+async def agent_chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话 — 手动 Agent 图版本。
 
     SSE 事件格式和 /api/chat_stream 完全一致：
@@ -47,7 +49,8 @@ async def agent_chat_stream(req: ChatRequest):
     """
 
     async def event_generator():
-        async for event in chat_stream(req.question, req.session_id):
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        async for event in chat_stream(req.question, thread_id):
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),

@@ -14,12 +14,13 @@
 """
 
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.services.rag_agent_service import query, query_stream
 from app.core.exceptions import AIOperatorException
+from app.core.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -35,7 +36,7 @@ class ChatRequest(BaseModel):
 
 # === /chat — 非流式对话（RAG Agent）===
 @router.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话接口：Agent 自动决定是否需要检索知识库。
 
     调用链路：
@@ -46,7 +47,8 @@ async def chat(req: ChatRequest):
         → 返回 {"answer": "完整回答文本"}
     """
     try:
-        answer = await query(req.question, req.session_id)
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        answer = await query(req.question, thread_id)
         return {"answer": answer}
     except AIOperatorException as e:
         raise HTTPException(status_code=503, detail=e.message)
@@ -56,7 +58,7 @@ async def chat(req: ChatRequest):
 
 # === /chat_stream — SSE 流式对话（RAG Agent）===
 @router.post("/chat_stream")
-async def chat_stream(req: ChatRequest):
+async def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话接口：边生成边推送，能看到工具调用过程。
 
     SSE 事件类型：
@@ -67,7 +69,8 @@ async def chat_stream(req: ChatRequest):
     """
 
     async def event_generator():
-        async for event in query_stream(req.question, req.session_id):
+        thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        async for event in query_stream(req.question, thread_id):
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),

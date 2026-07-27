@@ -24,6 +24,9 @@ from mcp_servers.ppt_builder import get_builder
 load_dotenv()
 mcp = FastMCP("PPTTool")
 
+from mcp_servers.shared import TokenCheckMiddleware
+mcp.add_middleware(TokenCheckMiddleware)
+
 
 @mcp.tool()
 def add_table_slide(title: str, columns: list[str], rows_json: str, session_id: str = "default") -> str:

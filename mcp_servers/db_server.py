@@ -28,6 +28,9 @@ load_dotenv()
 # 创建 MCP Server 实例
 mcp = FastMCP("DBTool")
 
+from mcp_servers.shared import TokenCheckMiddleware
+mcp.add_middleware(TokenCheckMiddleware)
+
 # === 数据库连接 ===
 
 # 默认查询限制 — 防止大结果集撑爆 Token

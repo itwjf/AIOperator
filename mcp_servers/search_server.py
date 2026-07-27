@@ -16,12 +16,18 @@ MCP Web 搜索服务 — 提供互联网搜索和网页内容获取功能。
 import os
 import re
 import sys
+from dotenv import load_dotenv
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from mcp_servers.shared import TokenCheckMiddleware
+
+load_dotenv()
+
 # 创建 MCP Server 实例
 mcp = FastMCP("SearchTool")
+mcp.add_middleware(TokenCheckMiddleware)
 
 
 # 简单的日志输出（MCP Server 独立进程，不依赖 app.core.logger）

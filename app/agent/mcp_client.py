@@ -18,26 +18,36 @@ from app.config import settings
 
 def _build_mcp_servers():
     """构建 MCP Server 配置，地址从环境变量读取（支持 Docker 部署）。"""
+    token = settings.mcp_secret_token
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     return {
         "time_tool": {
             "transport": "streamable-http",
             "url": settings.mcp_time_url,
+            "headers": headers,
         },
         "db_tool": {
             "transport": "streamable-http",
             "url": settings.mcp_db_url,
+            "headers": headers,
         },
         "ppt_tool": {
             "transport": "streamable-http",
             "url": settings.mcp_ppt_url,
+            "headers": headers,
         },
         "docker_tool": {
             "transport": "streamable-http",
             "url": settings.mcp_docker_url,
+            "headers": headers,
         },
         "search_tool": {
             "transport": "streamable-http",
             "url": settings.mcp_search_url,
+            "headers": headers,
         },
     }
 

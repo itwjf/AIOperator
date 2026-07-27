@@ -10,10 +10,10 @@
 | 阶段 | 名称 | 状态 | 开始日期 | 完成日期 |
 |------|------|:--:|----------|----------|
 | 一 | GitHub OAuth 认证体系 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
-| 二 | 会话 & 消息持久化迁移 | ⬜ 待开始 | — | — |
-| 三 | MCP Server 安全加固 | ⬜ 待开始 | — | — |
+| 二 | 会话 & 消息持久化迁移 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
+| 三 | MCP Server 安全加固 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 四 | 流控 & 并发保护 | ⬜ 待开始 | — | — |
-| 五 | 前端模块化拆分 | ⬜ 待开始 | — | — |
+| 五 | **Vue SPA 前端迁移** | ⬜ 待开始 | — | — |
 | 六 | LangSmith 可观测性集成 | ⬜ 待开始 | — | — |
 | 七 | 工程化 & 质量 | ⬜ 待开始 | — | — |
 
@@ -612,7 +612,7 @@
 
 ### 2.1 数据库建表
 
-- [ ] **2.1.1 编写 `migrations/002_create_sessions.sql`**
+- [x] **2.1.1 编写 `migrations/002_create_sessions.sql`**
 
   ```sql
   CREATE TABLE IF NOT EXISTS sessions (
@@ -628,7 +628,7 @@
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   ```
 
-- [ ] **2.1.2 编写 `migrations/003_create_messages.sql`**
+- [x] **2.1.2 编写 `migrations/003_create_messages.sql`**
 
   ```sql
   CREATE TABLE IF NOT EXISTS messages (
@@ -645,7 +645,7 @@
 
 ### 2.2 会话服务
 
-- [ ] **2.2 新建 `app/services/session_service.py`**
+- [x] **2.2 新建 `app/services/session_service.py`**
 
   使用 `app/core/db.py` 的 `get_db_connection()` 获取连接，写成同步函数：
 
@@ -706,7 +706,7 @@
 
 ### 2.3 消息服务
 
-- [ ] **2.3 新建 `app/services/message_service.py`**
+- [x] **2.3 新建 `app/services/message_service.py`**
 
   函数清单：
 
@@ -719,7 +719,7 @@
 
 ### 2.4 会话管理 API
 
-- [ ] **2.4 新建 `app/api/session.py`**
+- [x] **2.4 新建 `app/api/session.py`**
 
   路由前缀：`/api/sessions`
 
@@ -730,7 +730,7 @@
 
   所有端点都需要 `current_user: dict = Depends(get_current_user)`。
 
-- [ ] **2.4.1 在 `app/main.py` 中注册路由**
+- [x] **2.4.1 在 `app/main.py` 中注册路由**
 
   ```python
   from app.api.session import router as session_router
@@ -770,7 +770,7 @@
 
 ### 3.1 Token 校验中间件（MCP Server 侧）
 
-- [ ] **3.1.1 为 5 个 MCP Server 各加 token 校验**
+- [x] **3.1.1 为 5 个 MCP Server 各加 token 校验**
 
   在每个 MCP Server 文件（如 `mcp_servers/db_server.py`）中，新增一个 Starlette 中间件检查 `Authorization` header：
 
@@ -812,7 +812,7 @@
 
 ### 3.2 MCP Client 注入 Token
 
-- [ ] **3.2 修改 `app/agent/mcp_client.py`**
+- [x] **3.2 修改 `app/agent/mcp_client.py`**
 
   在 `_build_mcp_servers()` 中为每个 server 加上 `headers` 字段：
 
@@ -837,13 +837,13 @@
 
 ### 3.3 Docker Compose 安全更新
 
-- [ ] **3.3 修改 `docker-compose.yml`**
+- [x] **3.3 修改 `docker-compose.yml`**
 
   5 个 MCP Server 的 `ports` 从 `"8003:8003"` 改为 `"127.0.0.1:8003:8003"`（仅绑定本地，不对外暴露）。
 
 ### 3.4 DB Server 安全加固
 
-- [ ] **3.4.1 编写 `migrations/004_create_readonly_user.sql`**
+- [x] **3.4.1 编写 `migrations/004_create_readonly_user.sql`**
 
   ```sql
   -- 创建只读业务账号（手动在 MySQL 中执行）
@@ -853,7 +853,7 @@
   FLUSH PRIVILEGES;
   ```
 
-- [ ] **3.4.2 更新 `.env.example` 的黑名单配置**
+- [x] **3.4.2 更新 `.env.example` 的黑名单配置**
 
   ```bash
   DB_BLACKLIST_TABLES=users,sessions,messages
@@ -861,7 +861,7 @@
 
 ### 3.5 阶段三测试
 
-- [ ] **3.5.1 手动测试清单**
+- [x] **3.5.1 手动测试清单**
 
   1. 无 token curl 访问 `:8004/mcp` → 403
   2. 错误 token curl 访问 → 403
@@ -966,106 +966,417 @@
 
 ---
 
-## 阶段五：前端模块化拆分
+## 阶段五：Vue SPA 前端迁移
 
-**目标**：当前 `static/app.js` (约 2200 行) 拆分为多个独立 JS 文件。
+**目标**：`static/` (CDN Vue 3，484 行单文件) → `frontend/` (Vite + Vue 3 SFC + Vue Router)，实现真正的组件化开发。
+
+**迁移策略**：分步迁移，不一次性替换。先建空 Vite 项目 + 路由框架 → 逐个组件迁移 → 每个组件迁移后测试 → 全部完成后删旧文件。
 
 **产出物**：
-- `static/js/config.js` — 常量（阶段一已创建）
-- `static/js/api.js` — HTTP 封装（阶段一已创建）
-- `static/js/auth.js` — 登录模块（阶段一已创建）
-- `static/js/components/chat.js` — 聊天组件
-- `static/js/components/sidebar.js` — 会话侧边栏
-- `static/js/components/aiops.js` — 诊断面板
-- `static/js/components/upload.js` — 文件上传模块
-- `static/app.js` — 瘦身后的主入口
+- `frontend/` — Vite + Vue 3 工程（~15 个文件）
+- `frontend/src/pages/LoginPage.vue` — 登录页（替代 `static/login.html`）
+- `frontend/src/pages/MainPage.vue` — 主页面布局容器
+- `frontend/src/components/ChatPanel.vue` — 聊天组件
+- `frontend/src/components/Sidebar.vue` — 会话侧边栏
+- `frontend/src/components/AIOpsPanel.vue` — 诊断面板
+- `frontend/src/components/ModeSwitcher.vue` — Agent 模式切换
+- `frontend/src/components/Uploader.vue` — 文件上传
+- `frontend/src/router/index.js` — Vue Router 配置
+- `frontend/src/utils/config.js` — 常量（替代 `static/js/config.js`）
+- `frontend/src/utils/api.js` — fetch 封装（替代 `static/js/api.js`）
+- `frontend/src/utils/auth.js` — Token 管理（替代 `static/js/auth.js`）
 
-### 5.0 前置检查
+**删除的旧文件**（全部迁移完成后删除）：
+- `static/login.html`
+- `static/app.js`
+- `static/js/config.js`
+- `static/js/api.js`
+- `static/js/auth.js`
 
-- [ ] **5.0 确认阶段一的前端基础设施已完成**
+### 5.1 初始化 Vite 项目
 
-  阶段一已经创建了 `config.js`、`api.js`、`auth.js`、`login.html`。阶段五在此基础上继续拆分业务组件。
+- [ ] **5.1.1 创建 `frontend/` 工程**
 
-### 5.1 拆分组件
-
-> **拆分原则**：每个组件是一个 IIFE，暴露到 `window` 全局对象，避免构建工具。
-
-- [ ] **5.1.1 提取 `static/js/components/chat.js`**
-
-  从 `app.js` 提取以下内容：
-  - `sendMessage()` — 发送消息逻辑
-  - SSE 流式接收（`fetch` + `ReadableStream`）
-  - `renderMessage()` — 渲染消息气泡
-  - `switchAgentMode()` — 切换 Agent 模式（RAG/手动/MCP）
-  - 消息列表 DOM 操作
-
-  暴露到 `window.ChatComponent = { sendMessage, renderMessage, switchAgentMode }`
-
-- [ ] **5.1.2 提取 `static/js/components/sidebar.js`**
-
-  从 `app.js` 提取以下内容：
-  - `renderSessionList()` — 渲染会话列表
-  - `createSession()` — 新建会话（POST `/api/sessions`）
-  - `deleteSession()` — 删除会话（DELETE `/api/sessions/{id}`）
-  - `switchSession()` — 切换会话
-
-  暴露到 `window.SidebarComponent = { renderSessionList, createSession, deleteSession, switchSession }`
-
-- [ ] **5.1.3 提取 `static/js/components/aiops.js`**
-
-  从 `app.js` 提取以下内容：
-  - AIOps 诊断面板的 UI 逻辑
-  - SSE 事件处理（plan/step_start/step_result/replan/report）
-  - 进度展示
-
-  暴露到 `window.AIOpsComponent = { startDiagnose, renderPlan, renderReport }`
-
-- [ ] **5.1.4 提取 `static/js/components/upload.js`**
-
-  从 `app.js` 提取以下内容：
-  - 文件上传逻辑
-  - 进度条
-  - 上传结果展示
-
-  暴露到 `window.UploadComponent = { uploadFile, renderUploadResult }`
-
-- [ ] **5.1.5 精简 `static/app.js`**
-
-  保留内容：
-  - 应用初始化（`window.onload`）
-  - 全局事件监听
-  - 各组件之间的协调/通信
-
-  删除内容：已被各组件提取走的具体实现。
-
-### 5.2 更新 HTML
-
-- [ ] **5.2 修改 `static/index.html`**
-
-  更新 `<script>` 引入顺序：
-
-  ```html
-  <script src="js/config.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/components/chat.js"></script>
-  <script src="js/components/sidebar.js"></script>
-  <script src="js/components/aiops.js"></script>
-  <script src="js/components/upload.js"></script>
-  <script src="app.js"></script>
+  ```bash
+  npm create vite@latest frontend -- --template vue
+  cd frontend
+  npm install
+  npm install vue-router marked highlight.js
   ```
 
-### 5.3 阶段五测试
+  确认 `frontend/package.json` 包含依赖：`vue`, `vue-router`, `marked`, `highlight.js`
 
-- [ ] **5.3.1 功能回归测试清单**
+- [ ] **5.1.2 配置 Vite 代理**
 
-  1. RAG Agent 对话 → 正常请求/响应/流式输出
-  2. 手动 Agent 对话 → 正常
-  3. MCP Agent 对话 → 工具列表正常加载、工具调用正常
-  4. AIOps 诊断 → 完整流程（plan → step → replan → report）
-  5. 会话管理 → 新建/切换/删除会话
-  6. 文件上传 → 上传成功 + 入库
-  7. 无 JS 报错（浏览器 Console 干净）
+  路径：`frontend/vite.config.js`
+
+  ```javascript
+  import { defineConfig } from 'vite'
+  import vue from '@vitejs/plugin-vue'
+
+  export default defineConfig({
+    plugins: [vue()],
+    server: {
+      port: 5173,
+      proxy: {
+        '/api': 'http://127.0.0.1:9900',
+        '/health': 'http://127.0.0.1:9900',
+      },
+    },
+  })
+  ```
+
+  开发时 Vite 在 :5173 运行，`/api/*` 请求自动代理到 FastAPI :9900，无跨域问题。
+
+### 5.2 迁移工具模块
+
+- [ ] **5.2.1 创建 `frontend/src/utils/config.js`**
+
+  从 `static/js/config.js` 直接迁移，内容不变：
+
+  ```javascript
+  export const CONFIG = {
+      API_BASE: '',
+      JWT_KEY: 'aioperator_jwt_token',
+      USER_KEY: 'aioperator_user',
+  };
+  ```
+
+- [ ] **5.2.2 创建 `frontend/src/utils/api.js`**
+
+  从 `static/js/api.js` 迁移，改为 ES Module 导出 + Vue Router 集成：
+
+  ```javascript
+  import { CONFIG } from './config';
+
+  export async function apiRequest(path, options = {}) {
+      const token = localStorage.getItem(CONFIG.JWT_KEY);
+      const headers = {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+      };
+      if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(path, { ...options, headers });
+
+      if (response.status === 401) {
+          localStorage.removeItem(CONFIG.JWT_KEY);
+          localStorage.removeItem(CONFIG.USER_KEY);
+          // 前端路由跳转到登录页（由调用方处理或导航守卫处理）
+          window.location.href = '/login';
+          throw new Error('登录已过期，请重新登录');
+      }
+
+      return response;
+  }
+  ```
+
+- [ ] **5.2.3 创建 `frontend/src/utils/auth.js`**
+
+  从 `static/js/auth.js` 迁移，改为 ES Module 导出：
+
+  ```javascript
+  import { CONFIG } from './config';
+  import { apiRequest } from './api';
+
+  export function handleOAuthCallback() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (token) {
+          localStorage.setItem(CONFIG.JWT_KEY, token);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          fetchUserInfo();
+      }
+  }
+
+  export async function fetchUserInfo() {
+      try {
+          const resp = await apiRequest('/api/auth/me');
+          if (resp.ok) {
+              const user = await resp.json();
+              localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(user));
+          }
+      } catch (e) { /* 静默失败 */ }
+  }
+
+  export function logout() {
+      localStorage.removeItem(CONFIG.JWT_KEY);
+      localStorage.removeItem(CONFIG.USER_KEY);
+      window.location.href = '/login';
+  }
+
+  export function getCurrentUser() {
+      const raw = localStorage.getItem(CONFIG.USER_KEY);
+      return raw ? JSON.parse(raw) : null;
+  }
+
+  export function isAuthenticated() {
+      return !!localStorage.getItem(CONFIG.JWT_KEY);
+  }
+
+  // OAuth 回调检测
+  if (window.location.search.includes('token=')) {
+      handleOAuthCallback();
+  }
+  ```
+
+### 5.3 路由配置
+
+- [ ] **5.3.1 创建 `frontend/src/router/index.js`**
+
+  ```javascript
+  import { createRouter, createWebHistory } from 'vue-router';
+  import { isAuthenticated } from '../utils/auth';
+  import LoginPage from '../pages/LoginPage.vue';
+  import MainPage from '../pages/MainPage.vue';
+
+  const routes = [
+    {
+      path: '/login',
+      name: 'Login',
+      component: LoginPage,
+    },
+    {
+      path: '/',
+      name: 'Main',
+      component: MainPage,
+      meta: { requiresAuth: true },
+    },
+  ];
+
+  const router = createRouter({
+    history: createWebHistory(),
+    routes,
+  });
+
+  // 导航守卫：未登录重定向到 /login
+  router.beforeEach((to, from, next) => {
+    if (to.meta.requiresAuth && !isAuthenticated()) {
+      next('/login');
+    } else if (to.path === '/login' && isAuthenticated()) {
+      next('/');
+    } else {
+      next();
+    }
+  });
+
+  export default router;
+  ```
+
+### 5.4 创建页面组件
+
+- [ ] **5.4.1 创建 `LoginPage.vue`**
+
+  从 `static/login.html` 迁移。核心要素：
+  - 暗色渐变背景 + 毛玻璃卡片
+  - AIOperator 标题 + 副标题
+  - 一个"使用 GitHub 登录"按钮 → `window.location.href = '/api/auth/github/login'`
+  - 自包含 `<style scoped>` 样式（不依赖全局 CSS）
+
+- [ ] **5.4.2 创建 `MainPage.vue`**
+
+  布局容器组件，结构：
+  ```
+  <template>
+    <div class="app-layout">
+      <Sidebar />
+      <main class="main-area">
+        <header class="topbar">
+          <ModeSwitcher />
+          <div class="user-area">
+            <span>{{ currentUser?.username }}</span>
+            <button @click="logout">退出</button>
+          </div>
+        </header>
+        <ChatPanel />
+      </main>
+    </div>
+    <AIOpsPanel v-if="showAIOps" />
+    <Uploader />
+  </template>
+  ```
+
+  逻辑：
+  - `onMounted` 时调 `fetchUserInfo()` 获取当前用户
+  - 提供 `showAIOps` 响应式状态给子组件通信
+  - 全局 CSS 变量（`:root` 的颜色/间距等）定义在此组件的 `<style>` 中
+  - 液态玻璃设计系统的 CSS 变量从 `static/styles.css` 迁移过来
+
+### 5.5 迁移业务组件
+
+> 每个组件从 `static/app.js` 的 `setup()` 中提取对应逻辑。Vue 3 Composition API 语法 `<script setup>` 写法。
+
+- [ ] **5.5.1 创建 `Sidebar.vue`**
+
+  从 `app.js` 提取：
+  - 会话列表渲染（`sessions`, `currentSessionId`）
+  - `newSession()`, `switchSession(id)`, `deleteSession(id)`
+  - 文件上传按钮（触发 Uploader）
+  - 侧边栏收起/展开
+
+  ```vue
+  <script setup>
+  import { ref } from 'vue';
+  import { apiRequest } from '../utils/api';
+
+  const sessions = ref([]);
+  const currentSessionId = ref('default');
+  const collapsed = ref(false);
+
+  async function loadSessions() {
+    const resp = await apiRequest('/api/sessions');
+    if (resp.ok) {
+      sessions.value = await resp.json();
+    }
+  }
+
+  function newSession() { /* POST /api/sessions */ }
+  function switchSession(id) { /* emit */ }
+  function deleteSession(id) { /* DELETE /api/sessions/{id} */ }
+
+  // 暴露给父组件
+  defineExpose({ currentSessionId });
+  </script>
+  ```
+
+- [ ] **5.5.2 创建 `ChatPanel.vue`**
+
+  从 `app.js` 提取：
+  - 消息列表渲染（`v-for="m in messages"`）
+  - Markdown 渲染（`marked.parse()` + `highlight.js`）
+  - `sendMessage()` → 根据 `chatMode` 选 API
+  - SSE 流式接收（`fetch` + `ReadableStream`）
+  - `scrollBottom()` 自动滚动
+
+  核心逻辑不变，只是从 `setup()` 函数移到 `<script setup>`。
+
+- [ ] **5.5.3 创建 `ModeSwitcher.vue`**
+
+  从 `app.js` 提取：
+  - 四种模式标签：chat / agent / aiops / mcp
+  - 液态玻璃滑动指示器（`modeIndex` computed）
+  - 点击切换 `chatMode`
+
+  通过 emit 或 provide/inject 将 `chatMode` 传给 ChatPanel。
+
+- [ ] **5.5.4 创建 `AIOpsPanel.vue`**
+
+  从 `app.js` 提取 AIOps 诊断相关逻辑：
+  - 诊断确认弹窗（`showDiagnosisModal`, `diagnosisScope`）
+  - SSE 事件处理（plan / step_start / step_result / replan / report）
+  - 计划展示 + 进度可视化
+
+- [ ] **5.5.5 创建 `Uploader.vue`**
+
+  从 `app.js` 提取文件上传逻辑：
+  - `<input type="file" @change="uploadFile">`
+  - `FormData` POST `/api/upload`
+  - 上传结果提示
+
+### 5.6 入口文件
+
+- [ ] **5.6.1 修改 `frontend/src/main.js`**
+
+  ```javascript
+  import { createApp } from 'vue';
+  import App from './App.vue';
+  import router from './router';
+  import './utils/auth';  // 初始化 OAuth 回调检测
+
+  const app = createApp(App);
+  app.use(router);
+  app.mount('#app');
+  ```
+
+- [ ] **5.6.2 修改 `frontend/src/App.vue`**
+
+  ```vue
+  <template>
+    <router-view />
+  </template>
+  ```
+
+### 5.7 全局样式迁移
+
+- [ ] **5.7.1 将 `static/styles.css` 的 CSS 变量整合**
+
+  `:root` 中的 CSS Custom Properties（液态玻璃设计系统的颜色、间距等）放到 `MainPage.vue` 的 `<style>` 中（不使用 scoped，确保全局生效）。
+
+  各组件内部样式用 `<style scoped>`，避免污染。
+
+### 5.8 FastAPI 适配
+
+- [ ] **5.8.1 修改 `app/main.py`**
+
+  生产环境服务 Vue SPA 的构建产物：
+
+  ```python
+  import os
+  from fastapi.staticfiles import StaticFiles
+
+  # 生产环境：serve Vue SPA dist 目录
+  if os.path.isdir("frontend/dist"):
+      app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+  else:
+      # 开发环境：不服务前端，Vite 自己处理
+      @app.get("/")
+      async def dev_redirect():
+          from fastapi.responses import RedirectResponse
+          return RedirectResponse(url="http://localhost:5173")
+  ```
+
+  > `html=True` 让 FastAPI 对不存在的路径回退到 `index.html`（SPA 路由需要的 fallback）。
+
+### 5.9 更新 Docker
+
+- [ ] **5.9.1 修改 `Dockerfile`**
+
+  增加 Node.js 构建阶段：
+  ```
+  # 阶段 1：构建前端
+  FROM node:20-alpine AS frontend-build
+  WORKDIR /app/frontend
+  COPY frontend/package*.json ./
+  RUN npm ci
+  COPY frontend/ ./
+  RUN npm run build
+
+  # 阶段 2：Python 运行
+  FROM python:3.11-slim
+  ...
+  COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+  ```
+
+### 5.10 清理旧文件
+
+- [ ] **5.10.1 删除旧的 `static/` 前端文件**
+
+  确认所有功能在 Vue SPA 中正常后删除：
+  - `static/login.html`
+  - `static/app.js`
+  - `static/js/config.js`
+  - `static/js/api.js`
+  - `static/js/auth.js`
+
+  保留 `static/styles.css`（如果未被完全迁移）。
+
+### 5.11 阶段五测试
+
+- [ ] **5.11.1 功能回归测试清单**
+
+  1. `npm run dev` → Vite 启动在 :5173
+  2. 访问 `http://localhost:5173/login` → 显示登录页
+  3. 点击 GitHub 登录 → 跳转 GitHub 授权 → 回调 → Vue Router 导航到 `/` → 主页面
+  4. RAG Agent 对话 → 正常请求/响应/流式输出（Vite 代理到 FastAPI）
+  5. 手动 Agent 对话 → 正常
+  6. MCP Agent 对话 → 工具列表正常加载、工具调用正常
+  7. AIOps 诊断 → 完整流程（plan → step → replan → report）
+  8. 会话管理 → 新建/切换/删除会话
+  9. 文件上传 → 上传成功
+  10. 退出登录 → Router 导航到 /login
+  11. 浏览器 Console 无 JS 报错
 
 ---
 
@@ -1317,10 +1628,34 @@ LangSmith 解决的问题：
 
 ## 附录 A：涉及文件总览
 
-### 新增文件 (23个)
+### 新增文件 (~28个)
 
 ```
+frontend/                      # Vite + Vue 3 SPA 工程
+├── package.json
+├── vite.config.js
+├── index.html
+└── src/
+    ├── main.js                # createApp + router + mount
+    ├── App.vue                # 根组件（<router-view>）
+    ├── router/
+    │   └── index.js           # /login → LoginPage, / → MainPage（需认证）
+    ├── pages/
+    │   ├── LoginPage.vue      # GitHub 登录页（替代 static/login.html）
+    │   └── MainPage.vue       # 主页面布局容器
+    ├── components/
+    │   ├── ChatPanel.vue      # 消息列表 + 输入框 + SSE 流式渲染
+    │   ├── Sidebar.vue        # 会话列表 + 新建/切换/删除
+    │   ├── AIOpsPanel.vue     # 诊断确认弹窗 + SSE 进度
+    │   ├── ModeSwitcher.vue   # 四种 Agent 模式切换
+    │   └── Uploader.vue       # 文件上传
+    └── utils/
+        ├── config.js          # 常量（替代 static/js/config.js）
+        ├── api.js             # fetch 封装（替代 static/js/api.js）
+        └── auth.js            # Token 管理（替代 static/js/auth.js）
+
 migrations/
+├── init_all.sql               # 一键初始化（SOURCE 所有迁移）
 ├── 001_create_users.sql
 ├── 002_create_sessions.sql
 ├── 003_create_messages.sql
@@ -1333,24 +1668,12 @@ app/
 │   ├── db.py                  # MySQL 连接工具
 │   └── rate_limiter.py        # slowapi 流控
 ├── api/
-│   ├── auth.py                # GitHub OAuth / 用户信息 API
+│   ├── auth.py                # GitHub OAuth + 用户信息 API
 │   └── session.py             # 会话管理 API
 └── services/
     ├── session_service.py     # 会话 CRUD
     ├── message_service.py     # 消息存取
     └── llm_guard.py           # LLM 请求队列
-
-static/
-├── login.html                 # GitHub 登录页面
-└── js/
-    ├── config.js              # 前端配置常量
-    ├── api.js                 # 前端 HTTP 封装
-    ├── auth.js                # 前端登录模块
-    └── components/
-        ├── chat.js            # 聊天组件
-        ├── sidebar.js         # 侧边栏组件
-        ├── aiops.js           # 诊断组件
-        └── upload.js          # 上传组件
 
 tests/
 ├── test_security.py
@@ -1358,23 +1681,19 @@ tests/
 └── test_session.py
 ```
 
-### 修改文件 (21个)
+### 修改文件 (19个)
 
 ```
 app/
 ├── config.py                  # +JWT/GitHub OAuth/MCP_SECRET/DB/LangSmith 配置项
-├── main.py                    # +slowapi + auth 路由 + session 路由 + LangSmith 启动
+├── main.py                    # +auth/session 路由 + LangSmith 启动 + Vue SPA serve
 ├── api/
 │   ├── chat.py                # +认证依赖 + thread_id 拼接
-│   ├── agent.py               # +认证依赖 + thread_id 拼接
-│   ├── mcp.py                 # +认证依赖 + thread_id 拼接
-│   ├── aiops.py               # +认证依赖 + thread_id 拼接
-│   └── file.py                # +认证依赖
-├── services/
-│   ├── rag_agent_service.py   # +可选：user_id 感知（日志用）
-│   ├── manual_agent_service.py
-│   ├── mcp_agent_service.py
-│   └── aiops_service.py
+│   ├── agent.py               # 同上
+│   ├── mcp.py                 # 同上
+│   ├── aiops.py               # 同上
+│   ├── file.py                # 同上
+│   └── title.py               # 同上
 ├── agent/
 │   └── mcp_client.py          # +headers Token 注入
 └── core/
@@ -1382,16 +1701,25 @@ app/
 
 mcp_servers/
 ├── time_server.py             # +TokenCheckMiddleware
-├── db_server.py               # +TokenCheckMiddleware
+├── db_server.py               # +TokenCheckMiddleware + 审计日志
 ├── ppt_server.py              # +TokenCheckMiddleware
 ├── docker_server.py           # +TokenCheckMiddleware
 └── search_server.py           # +TokenCheckMiddleware
 
 docker-compose.yml             # MCP 端口绑定 127.0.0.1
+Dockerfile                     # +Node.js 构建阶段
 pyproject.toml                 # +pyjwt, httpx, slowapi
 .env.example                   # +认证/DB/GitHub OAuth/MCP_SECRET/LangSmith 配置
-static/index.html              # <script> 引入调整 + 登录检查
-static/app.js                  # 拆分后变瘦
+```
+
+### 删除文件 (5个，阶段五完成后)
+
+```
+static/login.html
+static/app.js
+static/js/config.js
+static/js/api.js
+static/js/auth.js
 ```
 
 ---
@@ -1401,13 +1729,14 @@ static/app.js                  # 拆分后变瘦
 | 决策 | 选择 | 理由 |
 |------|------|------|
 | 认证方式 | GitHub OAuth（唯一） | 面向开发者，零密码维护成本，安全由 GitHub 保障 |
-| 会话保持 | JWT（PyJWT） | 无状态、轻量、不需要 Redis |
+| 会话保持 | JWT（PyJWT），payload 携带用户信息 | 无状态，中间件不查 DB |
 | 认证注入 | Depends + 路由级注入（不是全局中间件） | 部分路由需公开，Depends 可精确控制 |
 | 用户存储 | MySQL users 表 (pymysql 直接操作，无 ORM) | 复用现有 MySQL，避免引入 SQLAlchemy |
 | 会话存储 | MySQL sessions/messages 表 | 统一数据源，支持按 user_id JOIN |
 | checkpoint 存储 | 继续 SQLite（每 Agent 独立文件） | 不破坏 LangGraph 现有机制，thread_id 已含 user_id 前缀天然隔离 |
 | MCP 安全 | 共享 Secret Token | 内网部署足够，无需 mTLS |
-| 可观测性 | LangSmith | LangChain 官方平台，零代码接入，自动追踪 Agent/LLM/Tool 全链路 |
-| 前端拆分 | IIFE 暴露到 window（不用 ES Module / webpack） | 保持零构建工具，简单 |
+| 可观测性 | LangSmith | LangChain 官方平台，零代码接入，自动追踪全链路 |
+| **前端框架** | **Vite + Vue 3 SFC + Vue Router** | 组件化、HMR 热更新、.vue 单文件、路由支持 |
+| **前端构建** | **npm + Vite**（Node.js 20） | 开发代理到 FastAPI，生产构建 dist/ |
 | 限流 | slowapi（内存存储） | 单机够用，无额外组件 |
 | 日志 | loguru JSON format（可选切换） | 不换库，只改格式 |

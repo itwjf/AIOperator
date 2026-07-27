@@ -12,7 +12,7 @@
 - 5 个 MCP Server：时间 / 数据库 / PPT / Docker / Web 搜索
 - 用户认证：GitHub OAuth + JWT 无状态会话
 - 可观测性：LangSmith 全链路追踪
-- 前端：纯 HTML/CSS/JS 单页应用
+- 前端：Vite + Vue 3 SPA（.vue 单文件组件 + Vue Router）
 
 ## 二、技术栈（不可变更）
 
@@ -31,6 +31,8 @@
 | HTTP 客户端 | httpx | GitHub API 调用 |
 | 可观测性 | LangSmith | 环境变量启用，零代码改动 |
 | 流控 | slowapi | 内存存储 |
+| **前端框架** | **Vite + Vue 3 SFC + Vue Router** | .vue 单文件组件，HMR 热更新 |
+| **前端构建** | **Node.js 20 + npm** | Vite 开发代理 → FastAPI，生产 build dist/ |
 | 配置 | pydantic-settings BaseSettings | `app/config.py` 集中管理 |
 | 日志 | **loguru**（唯一） | `from app.core.logger import logger` |
 | 部署 | Docker Compose | 单 Dockerfile，多 service |
@@ -78,7 +80,10 @@ AIOperator/
 │   │   └── aiops/           # Plan-Execute-Replan 节点
 │   └── tools/               # 本地 @tool 函数
 ├── mcp_servers/             # 5 个独立 MCP 进程
-├── static/                  # 前端（含 login.html + js/ 组件）
+├── frontend/                # Vue 3 SPA（Vite + .vue SFC + Vue Router）
+│   ├── package.json, vite.config.js
+│   └── src/（pages/, components/, utils/, router/）
+├── static/                  # 旧前端（阶段五完成后删除，只保留 CSS 变量文件）
 ├── plan/                    # 规划文档（ROADMAP + IMPLEMENTATION_PLAN）
 ├── migrations/              # 数据库 DDL（按序号命名）
 ├── tests/                   # pytest
@@ -167,6 +172,15 @@ AIOps 额外：`plan`, `step_start`, `step_result`, `replan`, `report`
 - 注释/docstring 用中文，标识符用英文，用户错误消息用中文
 - MCP Server 独立进程顶部加 `load_dotenv()`，不 import `app.config`
 
+### 5.5 前端规范
+
+- **文件结构**：pages/（路由级页面）、components/（可复用组件）、utils/（工具函数）、router/（路由配置）
+- **组件写法**：Vue 3 `<script setup>` + `<style scoped>` 单文件组件
+- **样式**：全局 CSS 变量放在 `MainPage.vue` 的非 scoped `<style>` 中；组件样式全部 scoped
+- **路由**：登录页 `/login` 公开；主页 `/` 需认证（Vue Router 导航守卫）
+- **API 调用**：统一用 `utils/api.js` 的 `apiRequest()`，不在组件中直接写 fetch
+- **状态共享**：用 provide/inject 或 props/emits 做组件间通信，不用全局变量
+
 ## 六、AI 禁止事项
 
 ### 技术栈
@@ -189,6 +203,9 @@ AIOps 额外：`plan`, `step_start`, `step_result`, `replan`, `report`
 - ❌ 不得修改 `app/core/exceptions.py` 异常类层次
 - ❌ 不得在 @tool 函数签名中新增参数
 - ❌ 不得在 MCP Server 中 `from app.config import settings`
+- ❌ 不得在前端组件中直接写裸 fetch（必须用 `utils/api.js` 的 `apiRequest`）
+- ❌ 不得在前端硬编码 API 地址或 token key（必须用 `utils/config.js` 的 CONFIG）
+- ❌ 不得破坏 SPA 路由（Vue Router push + 导航守卫，不直接跳转 HTML）
 
 ## 七、开发流程
 
@@ -218,6 +235,8 @@ AIOps 额外：`plan`, `step_start`, `step_result`, `replan`, `report`
 
 ## 八、常用命令
 
+### 8.1 Python 后端
+
 ```bash
 # 环境搭建
 python -m venv .venv && .venv\Scripts\activate
@@ -227,8 +246,8 @@ cp .env.example .env   # 编辑填入真实 Key
 # 生成安全密钥
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 
-# 初始化数据库
-mysql -u root -p aioperator < migrations/001_create_users.sql
+# 初始化数据库（一次性执行所有迁移）
+mysql -u root -p aioperator < migrations/init_all.sql
 
 # 启动（分 6 个终端）
 python mcp_servers/time_server.py      # :8003
@@ -250,6 +269,20 @@ pytest -v
 docker compose up -d --build
 docker compose logs -f app
 docker compose down
+```
+
+### 8.2 Vue 前端（阶段五）
+
+```bash
+# 首次安装
+cd frontend
+npm install
+
+# 开发启动（:5173，代理到 FastAPI :9900）
+npm run dev
+
+# 生产构建
+npm run build    # 输出到 frontend/dist/
 ```
 
 ## 九、工具清单

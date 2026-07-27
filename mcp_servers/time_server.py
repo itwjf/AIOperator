@@ -13,12 +13,18 @@ MCP 时间服务 — 把 get_current_time 拆成独立的 MCP Server。
 """
 
 from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from mcp_servers.shared import TokenCheckMiddleware
+
+load_dotenv()
+
 # 创建 MCP Server 实例
 mcp = FastMCP("TimeTool")
+mcp.add_middleware(TokenCheckMiddleware)
 
 # 时区偏移映射（和本地工具保持一致）
 TIMEZONE_MAP = {

@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     command: python mcp_servers/time_server.py
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     env_file: .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]

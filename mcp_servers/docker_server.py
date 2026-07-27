@@ -13,12 +13,16 @@ MCP Docker 管理服务 — 提供容器和镜像的查看与管理功能。
   http://127.0.0.1:8006/health — 健康检查
 """
 
-import os
 import sys
 import json
+from dotenv import load_dotenv
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+from mcp_servers.shared import TokenCheckMiddleware
+
+load_dotenv()
 
 
 # 简单的日志输出（MCP Server 独立进程，不依赖 app.core.logger）
@@ -27,6 +31,7 @@ def _log(level: str, msg: str):
 
 # 创建 MCP Server 实例
 mcp = FastMCP("DockerTool")
+mcp.add_middleware(TokenCheckMiddleware)
 
 # 尝试导入 Docker SDK
 try:

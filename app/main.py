@@ -71,6 +71,7 @@ from app.api.aiops import router as aiops_router
 from app.api.mcp import router as mcp_router
 from app.api.title import router as title_router
 from app.api.auth import router as auth_router
+from app.api.session import router as session_router
 
 app.include_router(chat_router)
 app.include_router(file_router)
@@ -79,6 +80,7 @@ app.include_router(aiops_router)
 app.include_router(mcp_router)
 app.include_router(title_router)
 app.include_router(auth_router)
+app.include_router(session_router)
 
 
 # === 静态文件（前端页面）===

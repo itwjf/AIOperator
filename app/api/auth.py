@@ -10,12 +10,14 @@ from app.config import settings
 from app.core.security import create_access_token
 from app.core.db import get_db_connection
 from app.core.auth_middleware import get_current_user
+from app.core.rate_limiter import limiter
 from app.core.logger import logger
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.get("/github/login")
+@limiter.limit("10/minute")
 async def github_login():
     """重定向到 GitHub 授权页。"""
     state = secrets.token_urlsafe(32)
@@ -32,6 +34,7 @@ async def github_login():
 
 
 @router.get("/github/callback")
+@limiter.limit("10/minute")
 async def github_callback(code: str, state: str, request: Request):
     """GitHub OAuth 回调：验证 state → 换 token → 查用户 → 签发 JWT。"""
     saved_state = request.cookies.get("oauth_state", "")

@@ -19,17 +19,20 @@ from app.api.chat import ChatRequest
 from app.services.mcp_agent_service import chat, chat_stream, get_all_tools_info
 from app.core.exceptions import AIOperatorException
 from app.core.auth_middleware import get_current_user
+from app.core.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
 
 @router.get("/tools")
+@limiter.limit("30/minute")
 async def list_tools():
     """列出所有可用工具（本地 + MCP 远程）"""
     return get_all_tools_info()
 
 
 @router.post("/chat")
+@limiter.limit("30/minute")
 async def mcp_chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话 — 使用本地 + MCP 远程工具。"""
     try:
@@ -43,6 +46,7 @@ async def mcp_chat(req: ChatRequest, current_user: dict = Depends(get_current_us
 
 
 @router.post("/chat_stream")
+@limiter.limit("30/minute")
 async def mcp_chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话 — 使用本地 + MCP 远程工具。"""
 

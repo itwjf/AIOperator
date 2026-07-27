@@ -34,6 +34,14 @@ app = FastAPI(
     version=settings.app_version,
 )
 
+# === 注册流控 ===
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.rate_limiter import limiter
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # === 请求日志中间件 ===
 # 每个 HTTP 请求进来时自动记录方法、路径、耗时和状态码

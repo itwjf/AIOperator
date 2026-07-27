@@ -16,11 +16,13 @@ from app.api.chat import ChatRequest  # 复用同一个请求模型
 from app.services.manual_agent_service import chat, chat_stream
 from app.core.exceptions import AIOperatorException
 from app.core.auth_middleware import get_current_user
+from app.core.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
 @router.post("/chat")
+@limiter.limit("30/minute")
 async def agent_chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话 — 手动 Agent 图版本。
 
@@ -38,6 +40,7 @@ async def agent_chat(req: ChatRequest, current_user: dict = Depends(get_current_
 
 
 @router.post("/chat_stream")
+@limiter.limit("30/minute")
 async def agent_chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话 — 手动 Agent 图版本。
 

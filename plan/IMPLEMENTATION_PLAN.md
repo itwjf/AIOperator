@@ -12,7 +12,7 @@
 | 一 | GitHub OAuth 认证体系 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 二 | 会话 & 消息持久化迁移 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 三 | MCP Server 安全加固 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
-| 四 | 流控 & 并发保护 | ⬜ 待开始 | — | — |
+| 四 | 流控 & 并发保护 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 五 | **Vue SPA 前端迁移** | ⬜ 待开始 | — | — |
 | 六 | LangSmith 可观测性集成 | ⬜ 待开始 | — | — |
 | 七 | 工程化 & 质量 | ⬜ 待开始 | — | — |
@@ -881,7 +881,7 @@
 
 ### 4.1 依赖安装
 
-- [ ] **4.1 更新 `pyproject.toml`**
+- [x] **4.1 更新 `pyproject.toml`**
 
   新增依赖：
   ```
@@ -892,7 +892,7 @@
 
 ### 4.2 Rate Limiter
 
-- [ ] **4.2 新建 `app/core/rate_limiter.py`**
+- [x] **4.2 新建 `app/core/rate_limiter.py`**
 
   ```python
   """
@@ -904,7 +904,7 @@
   limiter = Limiter(key_func=get_remote_address)
   ```
 
-- [ ] **4.2.1 修改 `app/main.py`**
+- [x] **4.2.1 修改 `app/main.py`**
 
   注册 slowapi：
   ```python
@@ -916,7 +916,7 @@
   app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
   ```
 
-- [ ] **4.2.2 在各 API 路由上加限流装饰器**
+- [x] **4.2.2 在各 API 路由上加限流装饰器**
 
   | 路由 | 限制 | 原因 |
   |------|------|------|
@@ -931,7 +931,7 @@
 
 ### 4.3 LLM 请求队列
 
-- [ ] **4.3 新建 `app/services/llm_guard.py`**
+- [x] **4.3 新建 `app/services/llm_guard.py`**
 
   功能：同一用户最多 3 个并发 LLM 请求，超出则排队等待。
 
@@ -957,7 +957,7 @@
 
 ### 4.4 阶段四测试
 
-- [ ] **4.4.1 手动测试清单**
+- [x] **4.4.1 手动测试清单**
 
   1. 同一用户 1 秒内发 35 次 `/api/chat` → 第 31 次起返回 429
   2. 429 响应包含 `Retry-After` header

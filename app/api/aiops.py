@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.services.aiops_service import diagnose
 from app.core.auth_middleware import get_current_user
+from app.core.rate_limiter import limiter
 
 router = APIRouter(prefix="/api", tags=["aiops"])
 
@@ -27,6 +28,7 @@ class AIOpsRequest(BaseModel):
 
 
 @router.post("/aiops")
+@limiter.limit("5/minute")
 async def aiops_diagnose(req: AIOpsRequest, current_user: dict = Depends(get_current_user)):
     """启动 AIOps 智能诊断。
 

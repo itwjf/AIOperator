@@ -21,6 +21,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.services.rag_agent_service import query, query_stream
 from app.core.exceptions import AIOperatorException
 from app.core.auth_middleware import get_current_user
+from app.core.rate_limiter import limiter
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -36,6 +37,7 @@ class ChatRequest(BaseModel):
 
 # === /chat — 非流式对话（RAG Agent）===
 @router.post("/chat")
+@limiter.limit("30/minute")
 async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话接口：Agent 自动决定是否需要检索知识库。
 
@@ -58,6 +60,7 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
 
 # === /chat_stream — SSE 流式对话（RAG Agent）===
 @router.post("/chat_stream")
+@limiter.limit("30/minute")
 async def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话接口：边生成边推送，能看到工具调用过程。
 

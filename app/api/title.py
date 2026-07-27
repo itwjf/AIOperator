@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.llm_factory import create_llm
 from app.core.auth_middleware import get_current_user
+from app.core.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/title", tags=["title"])
 
@@ -26,6 +27,7 @@ class TitleRequest(BaseModel):
 
 
 @router.post("/summarize")
+@limiter.limit("30/minute")
 async def summarize(req: TitleRequest, current_user: dict = Depends(get_current_user)):
     """将对话内容浓缩为 3-8 字中文标题。
 

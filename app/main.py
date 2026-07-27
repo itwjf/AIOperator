@@ -91,14 +91,20 @@ app.include_router(auth_router)
 app.include_router(session_router)
 
 
-# === 静态文件（前端页面）===
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# === 前端服务 ===
+# 开发环境：Vite dev server 在 :5173 代理到本服务，FastAPI 不直接服务前端
+# 生产环境：npm run build 后 dist/ 存在，FastAPI 直接 serve
+import os as _os
+if _os.path.isdir("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+else:
+    # 开发环境保留旧 static 目录 + 社区版
+    if _os.path.isdir("static"):
+        app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-@app.get("/")
-async def root():
-    """根路径重定向到前端页面。"""
-    return RedirectResponse(url="/static/index.html")
+    @app.get("/")
+    async def root():
+        return RedirectResponse(url="/static/index.html")
 
 
 # === 启动入口 ===

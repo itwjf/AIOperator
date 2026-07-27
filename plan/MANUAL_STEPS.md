@@ -156,4 +156,5 @@ curl -X POST http://127.0.0.1:9900/api/chat `
 |------|:--:|------|
 | 2026-07-27 | 一 | GitHub OAuth App 注册、`.env` 密钥生成、`users` 建表 |
 | 2026-07-27 | 二 | `sessions` + `messages` 建表 |
+| 2026-07-27 | 五 | 安装 Node.js 20.x + `cd frontend && npm install` |
 | 2026-07-27 | 三 | `MCP_SECRET_TOKEN` 配置、只读账号创建、Docker 端口绑定 |

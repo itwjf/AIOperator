@@ -13,7 +13,7 @@
 | 二 | 会话 & 消息持久化迁移 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 三 | MCP Server 安全加固 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 四 | 流控 & 并发保护 | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
-| 五 | **Vue SPA 前端迁移** | ⬜ 待开始 | — | — |
+| 五 | **Vue SPA 前端迁移** | ✅ 已完成 | 2026-07-27 | 2026-07-27 |
 | 六 | LangSmith 可观测性集成 | ⬜ 待开始 | — | — |
 | 七 | 工程化 & 质量 | ⬜ 待开始 | — | — |
 
@@ -995,7 +995,7 @@
 
 ### 5.1 初始化 Vite 项目
 
-- [ ] **5.1.1 创建 `frontend/` 工程**
+- [x] **5.1.1 创建 `frontend/` 工程**
 
   ```bash
   npm create vite@latest frontend -- --template vue
@@ -1006,7 +1006,7 @@
 
   确认 `frontend/package.json` 包含依赖：`vue`, `vue-router`, `marked`, `highlight.js`
 
-- [ ] **5.1.2 配置 Vite 代理**
+- [x] **5.1.2 配置 Vite 代理**
 
   路径：`frontend/vite.config.js`
 
@@ -1030,7 +1030,7 @@
 
 ### 5.2 迁移工具模块
 
-- [ ] **5.2.1 创建 `frontend/src/utils/config.js`**
+- [x] **5.2.1 创建 `frontend/src/utils/config.js`**
 
   从 `static/js/config.js` 直接迁移，内容不变：
 
@@ -1042,7 +1042,7 @@
   };
   ```
 
-- [ ] **5.2.2 创建 `frontend/src/utils/api.js`**
+- [x] **5.2.2 创建 `frontend/src/utils/api.js`**
 
   从 `static/js/api.js` 迁移，改为 ES Module 导出 + Vue Router 集成：
 
@@ -1073,7 +1073,7 @@
   }
   ```
 
-- [ ] **5.2.3 创建 `frontend/src/utils/auth.js`**
+- [x] **5.2.3 创建 `frontend/src/utils/auth.js`**
 
   从 `static/js/auth.js` 迁移，改为 ES Module 导出：
 
@@ -1124,7 +1124,7 @@
 
 ### 5.3 路由配置
 
-- [ ] **5.3.1 创建 `frontend/src/router/index.js`**
+- [x] **5.3.1 创建 `frontend/src/router/index.js`**
 
   ```javascript
   import { createRouter, createWebHistory } from 'vue-router';
@@ -1167,7 +1167,7 @@
 
 ### 5.4 创建页面组件
 
-- [ ] **5.4.1 创建 `LoginPage.vue`**
+- [x] **5.4.1 创建 `LoginPage.vue`**
 
   从 `static/login.html` 迁移。核心要素：
   - 暗色渐变背景 + 毛玻璃卡片
@@ -1175,7 +1175,7 @@
   - 一个"使用 GitHub 登录"按钮 → `window.location.href = '/api/auth/github/login'`
   - 自包含 `<style scoped>` 样式（不依赖全局 CSS）
 
-- [ ] **5.4.2 创建 `MainPage.vue`**
+- [x] **5.4.2 创建 `MainPage.vue`**
 
   布局容器组件，结构：
   ```
@@ -1208,7 +1208,7 @@
 
 > 每个组件从 `static/app.js` 的 `setup()` 中提取对应逻辑。Vue 3 Composition API 语法 `<script setup>` 写法。
 
-- [ ] **5.5.1 创建 `Sidebar.vue`**
+- [x] **5.5.1 创建 `Sidebar.vue`**
 
   从 `app.js` 提取：
   - 会话列表渲染（`sessions`, `currentSessionId`）
@@ -1241,7 +1241,7 @@
   </script>
   ```
 
-- [ ] **5.5.2 创建 `ChatPanel.vue`**
+- [x] **5.5.2 创建 `ChatPanel.vue`**
 
   从 `app.js` 提取：
   - 消息列表渲染（`v-for="m in messages"`）
@@ -1252,7 +1252,7 @@
 
   核心逻辑不变，只是从 `setup()` 函数移到 `<script setup>`。
 
-- [ ] **5.5.3 创建 `ModeSwitcher.vue`**
+- [x] **5.5.3 创建 `ModeSwitcher.vue`**
 
   从 `app.js` 提取：
   - 四种模式标签：chat / agent / aiops / mcp
@@ -1261,14 +1261,14 @@
 
   通过 emit 或 provide/inject 将 `chatMode` 传给 ChatPanel。
 
-- [ ] **5.5.4 创建 `AIOpsPanel.vue`**
+- [x] **5.5.4 创建 `AIOpsPanel.vue`**
 
   从 `app.js` 提取 AIOps 诊断相关逻辑：
   - 诊断确认弹窗（`showDiagnosisModal`, `diagnosisScope`）
   - SSE 事件处理（plan / step_start / step_result / replan / report）
   - 计划展示 + 进度可视化
 
-- [ ] **5.5.5 创建 `Uploader.vue`**
+- [x] **5.5.5 创建 `Uploader.vue`**
 
   从 `app.js` 提取文件上传逻辑：
   - `<input type="file" @change="uploadFile">`
@@ -1277,7 +1277,7 @@
 
 ### 5.6 入口文件
 
-- [ ] **5.6.1 修改 `frontend/src/main.js`**
+- [x] **5.6.1 修改 `frontend/src/main.js`**
 
   ```javascript
   import { createApp } from 'vue';
@@ -1290,7 +1290,7 @@
   app.mount('#app');
   ```
 
-- [ ] **5.6.2 修改 `frontend/src/App.vue`**
+- [x] **5.6.2 修改 `frontend/src/App.vue`**
 
   ```vue
   <template>
@@ -1300,7 +1300,7 @@
 
 ### 5.7 全局样式迁移
 
-- [ ] **5.7.1 将 `static/styles.css` 的 CSS 变量整合**
+- [x] **5.7.1 将 `static/styles.css` 的 CSS 变量整合**
 
   `:root` 中的 CSS Custom Properties（液态玻璃设计系统的颜色、间距等）放到 `MainPage.vue` 的 `<style>` 中（不使用 scoped，确保全局生效）。
 
@@ -1308,7 +1308,7 @@
 
 ### 5.8 FastAPI 适配
 
-- [ ] **5.8.1 修改 `app/main.py`**
+- [x] **5.8.1 修改 `app/main.py`**
 
   生产环境服务 Vue SPA 的构建产物：
 
@@ -1331,7 +1331,7 @@
 
 ### 5.9 更新 Docker
 
-- [ ] **5.9.1 修改 `Dockerfile`**
+- [x] **5.9.1 修改 `Dockerfile`**
 
   增加 Node.js 构建阶段：
   ```
@@ -1351,7 +1351,7 @@
 
 ### 5.10 清理旧文件
 
-- [ ] **5.10.1 删除旧的 `static/` 前端文件**
+- [x] **5.10.1 删除旧的 `static/` 前端文件**
 
   确认所有功能在 Vue SPA 中正常后删除：
   - `static/login.html`
@@ -1364,7 +1364,7 @@
 
 ### 5.11 阶段五测试
 
-- [ ] **5.11.1 功能回归测试清单**
+- [x] **5.11.1 功能回归测试清单**
 
   1. `npm run dev` → Vite 启动在 :5173
   2. 访问 `http://localhost:5173/login` → 显示登录页

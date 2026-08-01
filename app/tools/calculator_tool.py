@@ -9,6 +9,7 @@
 
 import re
 import math
+import datetime as _datetime_module
 from datetime import datetime, timedelta
 from langchain_core.tools import tool
 
@@ -43,7 +44,9 @@ _SAFE_NAMESPACE = {
     "sin": math.sin,
     "cos": math.cos,
     # 时间相关 — 方便做时间戳转换
-    "datetime": datetime,
+    # 注意：这里暴露 datetime 模块（而非 datetime 类），
+    # 才能支持 datetime.datetime.now()、datetime.datetime(2024,1,1) 等写法。
+    "datetime": _datetime_module,
     "timedelta": timedelta,
 }
 
@@ -100,5 +103,5 @@ def calculate(expression: str) -> str:
         return f"表达式语法错误: {e}"
     except ZeroDivisionError:
         return "错误: 除数不能为零"
-    except (NameError, TypeError, ValueError, OverflowError) as e:
+    except (NameError, TypeError, ValueError, OverflowError, AttributeError) as e:
         return f"计算错误: {e}"

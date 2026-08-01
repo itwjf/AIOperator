@@ -52,18 +52,35 @@ def get_session_internal_id(user_id: int, session_id: str) -> int | None:
 
 
 def delete_session(user_id: int, session_id: str) -> bool:
+    """删除会话及其对话消息。
+
+    先通过内部 ID 删除 messages 表中的对话记录，再删除 sessions 表行。
+    注意：SQLite checkpointer 的记忆清理在 API 层异步完成（见 app/api/session.py）。
+    """
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
+            # 先取内部自增 ID，用于清理 messages 表
+            cursor.execute(
+                "SELECT id FROM sessions WHERE user_id=%s AND session_id=%s",
+                (user_id, session_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return False
+            session_fk = row["id"]
+
+            # 删除该会话下的对话消息
+            cursor.execute("DELETE FROM messages WHERE session_id=%s", (session_fk,))
+            # 删除会话本身
             cursor.execute(
                 "DELETE FROM sessions WHERE user_id=%s AND session_id=%s",
                 (user_id, session_id),
             )
         conn.commit()
-        affected = cursor.rowcount
     finally:
         conn.close()
-    return affected > 0
+    return True
 
 
 def update_session_title(user_id: int, session_id: str, title: str) -> bool:

@@ -27,14 +27,16 @@ from app.core.rate_limiter import limiter
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
-def _persist_chat(user_id: int, session_id: str, question: str, answer: str) -> None:
+def _persist_chat(
+    user_id: int, session_id: str, question: str, answer: str, agent_type: str = "rag"
+) -> None:
     """把一轮对话（用户问题 + AI 回答）落库到 MySQL 的 sessions/messages 表。
 
     - 先确保 session 存在（幂等，重复调用不报错）
     - 再通过内部自增 ID 把消息写入 messages 表
     """
     try:
-        session_service.create_session(user_id, session_id, agent_type="rag")
+        session_service.create_session(user_id, session_id, agent_type=agent_type)
         session_fk = session_service.get_session_internal_id(user_id, session_id)
         if session_fk is None:
             return

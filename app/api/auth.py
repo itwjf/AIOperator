@@ -44,6 +44,7 @@ async def github_login(request: Request):
         f"&redirect_uri={redirect_uri}"
         f"&scope=user:email"
         f"&state={state}"
+        f"&prompt=select_account"
     )
     response = RedirectResponse(url=redirect_url)
     response.set_cookie(

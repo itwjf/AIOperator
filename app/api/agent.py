@@ -12,7 +12,7 @@ import json
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.chat import ChatRequest  # 复用同一个请求模型
+from app.api.chat import ChatRequest, _persist_chat  # 复用请求模型 + 落库逻辑
 from app.services.manual_agent_service import chat, chat_stream
 from app.core.exceptions import AIOperatorException
 from app.core.auth_middleware import get_current_user
@@ -32,6 +32,8 @@ async def agent_chat(request: Request, req: ChatRequest, current_user: dict = De
     try:
         thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
         answer = await chat(req.question, thread_id)
+        if current_user:
+            _persist_chat(current_user["id"], req.session_id, req.question, answer, agent_type="manual")
         return {"answer": answer}
     except AIOperatorException as e:
         raise HTTPException(status_code=503, detail=e.message)
@@ -53,10 +55,19 @@ async def agent_chat_stream(request: Request, req: ChatRequest, current_user: di
 
     async def event_generator():
         thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        answer_chunks: list[str] = []
         async for event in chat_stream(req.question, thread_id):
+            if event.get("type") == "content":
+                answer_chunks.append(event.get("data", ""))
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),
             }
+        # 流式结束后，把这一轮对话落库到 MySQL
+        if current_user:
+            _persist_chat(
+                current_user["id"], req.session_id, req.question,
+                "".join(answer_chunks), agent_type="manual",
+            )
 
     return EventSourceResponse(event_generator())

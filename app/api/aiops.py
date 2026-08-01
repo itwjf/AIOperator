@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from app.api.chat import _persist_chat
 from app.services.aiops_service import diagnose
 from app.core.auth_middleware import get_current_user
 from app.core.rate_limiter import limiter
@@ -24,6 +25,10 @@ class AIOpsRequest(BaseModel):
     session_id: str = Field(
         default="default",
         description="会话 ID，用于记忆隔离",
+    )
+    question: str | None = Field(
+        default=None,
+        description="用户发起的诊断请求文本，用于落库展示（可选）",
     )
 
 
@@ -57,10 +62,20 @@ async def aiops_diagnose(request: Request, req: AIOpsRequest, current_user: dict
 
     async def event_generator():
         thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        report_chunks: list[str] = []
         async for event in diagnose(thread_id):
+            if event.get("type") == "report":
+                report_chunks.append(event.get("data", ""))
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),
             }
+        # 诊断结束后，把诊断请求与最终报告落库到 MySQL
+        if current_user:
+            question = req.question or "启动系统全面诊断"
+            _persist_chat(
+                current_user["id"], req.session_id, question,
+                "".join(report_chunks), agent_type="aiops",
+            )
 
     return EventSourceResponse(event_generator())

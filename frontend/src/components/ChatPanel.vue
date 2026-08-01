@@ -135,10 +135,10 @@ function sendDiagnoseMessage(scope) {
   messages.value.push({ role: 'user', html: renderMd(text) });
   scrollBottom();
   loading.value = true;
-  runAIOps();
+  runAIOps(text);
 }
 
-async function runAIOps() {
+async function runAIOps(question = '启动系统全面诊断') {
   messages.value.push({ role: 'assistant', html: '', aiopsPlan: [], aiopsResults: {}, aiopsCurrent: -1 });
   const msg = messages.value[messages.value.length - 1];
   let buffer = '';
@@ -146,7 +146,7 @@ async function runAIOps() {
   try {
     const resp = await apiRequest('/api/aiops', {
       method: 'POST',
-      body: JSON.stringify({ session_id: props.currentSessionId }),
+      body: JSON.stringify({ session_id: props.currentSessionId, question }),
     });
     const reader = resp.body.getReader();
     const dec = new TextDecoder();

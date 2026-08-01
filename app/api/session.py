@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from app.core.auth_middleware import get_current_user
+from app.core.checkpoint import delete_thread_all
 from app.services import session_service, message_service
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -45,9 +46,19 @@ async def create_session(req: CreateSessionRequest, current_user: dict = Depends
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
-    """删除会话。"""
+    """删除会话。
+
+    清理三处数据：
+      1. MySQL sessions 表（含 messages 表，见 session_service.delete_session）
+      2. SQLite checkpointer 中该线程在 rag/manual/mcp/aiops 四种 Agent 的记忆
+    """
     if not session_service.delete_session(current_user["id"], session_id):
         raise HTTPException(status_code=404, detail="会话不存在")
+
+    # 同步清理四种 Agent 在 SQLite 中的对话记忆（thread_id = f"{user_id}:{session_id}"）
+    thread_id = f"{current_user['id']}:{session_id}"
+    await delete_thread_all(thread_id)
+
     return {"status": "ok"}
 
 

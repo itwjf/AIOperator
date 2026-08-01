@@ -25,6 +25,42 @@ from app.core.logger import logger
 # 各 Agent 的 checkpointer 单例缓存：{agent_name: AsyncSqliteSaver}
 _savers: dict[str, AsyncSqliteSaver] = {}
 
+# 所有 Agent 的标识，删除会话时需要遍历清理每个 Agent 的记忆
+AGENT_NAMES = ("rag", "manual", "mcp", "aiops")
+
+
+async def delete_thread(agent_name: str, thread_id: str) -> bool:
+    """删除指定 Agent 中某个会话线程的对话记忆。
+
+    对应 LangGraph 的 `adelete_thread`：会连同 checkpoint 数据、
+    写日志（WAL）、以及检查点元数据一起清理。
+
+    Args:
+        agent_name: Agent 标识，如 "rag" / "mcp" / "manual" / "aiops"
+        thread_id:   会话线程 ID（本项目为 f"{user_id}:{session_id}"）
+
+    Returns:
+        True 表示成功删除（含本来就不存在的情况），False 表示删除失败
+    """
+    try:
+        saver = await get_checkpointer(agent_name)
+        await saver.adelete_thread(thread_id)
+        logger.info("Checkpointer 已删除 — agent: {}, thread: {}", agent_name, thread_id)
+        return True
+    except Exception as e:
+        logger.warning("Checkpointer 删除失败 — agent: {}, thread: {}, err: {}",
+                       agent_name, thread_id, e)
+        return False
+
+
+async def delete_thread_all(thread_id: str) -> bool:
+    """遍历所有 Agent，清理某个会话线程的记忆（切换模式后各 Agent 都有独立记忆）。"""
+    ok = True
+    for agent_name in AGENT_NAMES:
+        if not await delete_thread(agent_name, thread_id):
+            ok = False
+    return ok
+
 
 async def get_checkpointer(agent_name: str) -> AsyncSqliteSaver:
     """获取指定 Agent 的 AsyncSqliteSaver 单例。

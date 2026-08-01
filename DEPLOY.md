@@ -240,11 +240,9 @@ docker compose up -d mysql milvus
 
 ### 启动应用和 MCP Server
 
-**Windows**：
+**Windows / 本地开发**：
 
-双击 `start.bat`，自动在新窗口打开主应用 + 3 个 MCP Server。
-
-或手动：
+分别在多个终端中启动主应用与所需 MCP Server：
 
 ```bash
 # 分别在不同终端中启动

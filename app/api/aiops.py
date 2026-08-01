@@ -9,7 +9,7 @@ POST /api/aiops
 """
 
 import json
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -29,7 +29,7 @@ class AIOpsRequest(BaseModel):
 
 @router.post("/aiops")
 @limiter.limit("5/minute")
-async def aiops_diagnose(req: AIOpsRequest, current_user: dict = Depends(get_current_user)):
+async def aiops_diagnose(request: Request, req: AIOpsRequest, current_user: dict = Depends(get_current_user)):
     """启动 AIOps 智能诊断。
 
     SSE 事件类型：

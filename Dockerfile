@@ -24,7 +24,6 @@ RUN python -c "import tomllib; deps = tomllib.load(open('pyproject.toml','rb'))[
 # 复制应用代码
 COPY app/ ./app/
 COPY mcp_servers/ ./mcp_servers/
-COPY static/ ./static/
 
 # 创建输出目录
 RUN mkdir -p /app/output

@@ -83,7 +83,6 @@ AIOperator/
 ├── frontend/                # Vue 3 SPA（Vite + .vue SFC + Vue Router）
 │   ├── package.json, vite.config.js
 │   └── src/（pages/, components/, utils/, router/）
-├── static/                  # 旧前端（阶段五完成后删除，只保留 CSS 变量文件）
 ├── plan/                    # 规划文档（ROADMAP + IMPLEMENTATION_PLAN）
 ├── migrations/              # 数据库 DDL（按序号命名）
 ├── tests/                   # pytest
@@ -131,7 +130,7 @@ API 层      → catch → HTTPException + 状态码
 - 不存储密码，无注册页，无密码登录
 - JWT 24 小时过期，无状态验证
 - `get_current_user` 通过 FastAPI `Depends` 注入
-- 公开路由白名单：`/health`, `/docs`, `/openapi.json`, `/static`, `/api/auth`
+- 公开路由白名单：`/health`, `/docs`, `/openapi.json`, `/api/auth`
 
 ### 4.5 用户数据隔离
 

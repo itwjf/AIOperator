@@ -72,6 +72,11 @@ async function summarize() {
     const session = props.sessions?.find(s => s.session_id === props.currentSessionId);
     if (session && d.title?.length >= 2) {
       session.title = d.title;
+      // 回写数据库，避免重新加载会话列表后标题丢失
+      apiRequest(`/api/sessions/${encodeURIComponent(props.currentSessionId)}/title`, {
+        method: 'PUT',
+        body: JSON.stringify({ title: d.title }),
+      }).catch(() => {});
       emit('sessions-changed');
     }
   } catch (e) { /* 降级 */ }
@@ -177,7 +182,18 @@ async function runAIOps() {
 function clearMessages() { messages.value = []; }
 async function loadMessages(id) {
   clearMessages();
-  // TODO: 后续从 API 拉取历史消息（阶段二后端已就绪，前端待接入）
+  try {
+    const resp = await apiRequest(`/api/sessions/${encodeURIComponent(id)}/messages`);
+    const data = await resp.json();
+    const list = data?.messages || [];
+    messages.value = list.map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      html: renderMd(m.content),
+    }));
+  } catch (e) {
+    /* 加载失败降级为空会话 */
+  }
+  scrollBottom();
 }
 
 onMounted(() => inputBox.value?.focus());

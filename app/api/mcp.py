@@ -12,7 +12,7 @@ MCP API — 展示 MCP 远程工具 + 本地工具的协作。
 """
 
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.chat import ChatRequest
@@ -26,14 +26,14 @@ router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
 @router.get("/tools")
 @limiter.limit("30/minute")
-async def list_tools():
+async def list_tools(request: Request):
     """列出所有可用工具（本地 + MCP 远程）"""
     return get_all_tools_info()
 
 
 @router.post("/chat")
 @limiter.limit("30/minute")
-async def mcp_chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+async def mcp_chat(request: Request, req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话 — 使用本地 + MCP 远程工具。"""
     try:
         thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
@@ -47,7 +47,7 @@ async def mcp_chat(req: ChatRequest, current_user: dict = Depends(get_current_us
 
 @router.post("/chat_stream")
 @limiter.limit("30/minute")
-async def mcp_chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+async def mcp_chat_stream(request: Request, req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话 — 使用本地 + MCP 远程工具。"""
 
     async def event_generator():

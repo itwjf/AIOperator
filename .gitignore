@@ -13,6 +13,11 @@ PPT生成MCP服务器开发方案.md
 PPT模版.pptx
 mcp_servers/templates/default.pptx
 
+# Node.js / 前端
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
 # Python
 __pycache__/
 *.py[cod]

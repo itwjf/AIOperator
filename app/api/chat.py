@@ -14,16 +14,41 @@
 """
 
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.services.rag_agent_service import query, query_stream
+from app.services import session_service, message_service
 from app.core.exceptions import AIOperatorException
 from app.core.auth_middleware import get_current_user
 from app.core.rate_limiter import limiter
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+
+def _persist_chat(user_id: int, session_id: str, question: str, answer: str) -> None:
+    """把一轮对话（用户问题 + AI 回答）落库到 MySQL 的 sessions/messages 表。
+
+    - 先确保 session 存在（幂等，重复调用不报错）
+    - 再通过内部自增 ID 把消息写入 messages 表
+    """
+    try:
+        session_service.create_session(user_id, session_id, agent_type="rag")
+        session_fk = session_service.get_session_internal_id(user_id, session_id)
+        if session_fk is None:
+            return
+        message_service.save_conversation(
+            session_fk,
+            [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer},
+            ],
+        )
+    except Exception:
+        # 落库失败不影响对话主流程
+        from app.core.logger import logger
+        logger.warning("对话落库失败 user_id=%s session=%s", user_id, session_id, exc_info=True)
 
 
 # === 请求模型 ===
@@ -38,7 +63,7 @@ class ChatRequest(BaseModel):
 # === /chat — 非流式对话（RAG Agent）===
 @router.post("/chat")
 @limiter.limit("30/minute")
-async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+async def chat(request: Request, req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """非流式对话接口：Agent 自动决定是否需要检索知识库。
 
     调用链路：
@@ -51,6 +76,8 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
     try:
         thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
         answer = await query(req.question, thread_id)
+        if current_user:
+            _persist_chat(current_user["id"], req.session_id, req.question, answer)
         return {"answer": answer}
     except AIOperatorException as e:
         raise HTTPException(status_code=503, detail=e.message)
@@ -61,7 +88,7 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
 # === /chat_stream — SSE 流式对话（RAG Agent）===
 @router.post("/chat_stream")
 @limiter.limit("30/minute")
-async def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+async def chat_stream(request: Request, req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """流式对话接口：边生成边推送，能看到工具调用过程。
 
     SSE 事件类型：
@@ -73,10 +100,16 @@ async def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current
 
     async def event_generator():
         thread_id = f"{current_user['id']}:{req.session_id}" if current_user else req.session_id
+        answer_chunks: list[str] = []
         async for event in query_stream(req.question, thread_id):
+            if event.get("type") == "content":
+                answer_chunks.append(event.get("data", ""))
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),
             }
+        # 流式结束后，把这一轮对话落库到 MySQL
+        if current_user:
+            _persist_chat(current_user["id"], req.session_id, req.question, "".join(answer_chunks))
 
     return EventSourceResponse(event_generator())

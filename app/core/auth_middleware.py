@@ -5,7 +5,7 @@ from fastapi import Request, HTTPException
 from app.core.security import decode_access_token
 
 # 不需要认证的路由前缀
-PUBLIC_PREFIXES = ("/health", "/docs", "/openapi.json", "/static", "/api/auth/github")
+PUBLIC_PREFIXES = ("/health", "/docs", "/openapi.json", "/api/auth/github")
 
 
 async def get_current_user(request: Request) -> dict | None:

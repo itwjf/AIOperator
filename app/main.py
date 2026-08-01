@@ -5,10 +5,11 @@ FastAPI 应用入口 — 创建应用实例、注册路由、启动服务。
 或者：uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
 """
 
+import os as _os
 import time
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse
 import uvicorn
 
 from app.config import settings
@@ -94,17 +95,39 @@ app.include_router(session_router)
 # === 前端服务 ===
 # 开发环境：Vite dev server 在 :5173 代理到本服务，FastAPI 不直接服务前端
 # 生产环境：npm run build 后 dist/ 存在，FastAPI 直接 serve
-import os as _os
-if _os.path.isdir("frontend/dist"):
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
-else:
-    # 开发环境保留旧 static 目录 + 社区版
-    if _os.path.isdir("static"):
-        app.mount("/static", StaticFiles(directory="static"), name="static")
+#
+# 前端使用 Vue Router history 模式（如 /login），刷新或直接访问这些前端路由时
+# 不能返回 404，需 fallback 到 index.html 交给前端路由渲染。
+#
+# 路由注册顺序很关键（Starlette 按注册顺序匹配）：
+#   1. API 路由已在前面的 include_router 注册，优先命中；
+#   2. 静态打包资源 /assets/* 用 mount 注册（必须在 catch-all 之前）；
+#   3. catch-all 兜底：其余非 API 路径返回 index.html。
+_FRONTEND_DIST = "frontend/dist"
+_ASSETS_DIR = _os.path.join(_FRONTEND_DIST, "assets")
 
-    @app.get("/")
-    async def root():
-        return RedirectResponse(url="/static/index.html")
+# 后端路径前缀，绝不能被 SPA fallback 拦截（兜底保护）
+_NON_SPA_PREFIXES = ("/api", "/health", "/docs", "/redoc", "/openapi.json", "/assets")
+
+
+if _os.path.isdir(_FRONTEND_DIST):
+    # 静态打包资源（Vite 产物，带内容 hash）—— 必须在 catch-all 之前注册
+    if _os.path.isdir(_ASSETS_DIR):
+        app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
+
+
+# catch-all 兜底：放在 mount 之后，避免抢走 /assets 等静态资源。
+# 只有当前面所有路由都没匹配到时（即用户直接访问 history 路由如 /login）才进入。
+if _os.path.isdir(_FRONTEND_DIST):
+    from fastapi import HTTPException
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        """SPA catch-all：非 API/静态资源路径返回 index.html，交给 Vue Router 渲染。"""
+        request_path = "/" + full_path if full_path else "/"
+        if request_path.startswith(_NON_SPA_PREFIXES):
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(_os.path.join(_FRONTEND_DIST, "index.html"))
 
 
 # === 启动入口 ===

@@ -145,8 +145,8 @@ Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    前端 (Vue 3)                       │
-│  static/index.html + app.js + styles.css             │
+│                前端 (Vue 3 + Vite)                    │
+│        frontend/ → npm run build → dist/             │
 └──────────────────────┬──────────────────────────────┘
                        │ HTTP/SSE
 ┌──────────────────────┴──────────────────────────────┐
@@ -356,15 +356,14 @@ AIOperator/
 │   ├── ppt_builder.py             #   PPT 渲染引擎（python-pptx）
 │   ├── docker_server.py           #   Docker 管理服务（FastMCP, Port 8006）🆕
 │   └── search_server.py           #   Web 搜索服务（FastMCP, Port 8007）🆕
-├── static/                        # 前端静态文件
-│   ├── index.html                 #   Vue 3 单页应用
-│   ├── app.js                     #   应用逻辑
-│   └── styles.css                 #   样式
+├── frontend/                      # 前端源码（Vue 3 + Vite）
+│   ├── src/                       #   应用源码
+│   ├── dist/                      #   构建产物（npm run build 生成）
+│   └── package.json               #   前端依赖与脚本
 ├── aiops-docs/                    # 上传文档存储目录
 ├── Dockerfile                     # Docker 镜像构建文件
 ├── docker-compose.yml             # Docker 全栈编排配置
 ├── vector-database.yml            # Milvus 独立部署配置
-├── start.bat                      # Windows 一键启动脚本
 ├── .env.example                   # 环境变量模板（可提交 Git）
 ├── .env                           # 环境变量（敏感信息，需自行创建）
 ├── .dockerignore                  # Docker 构建排除文件
@@ -542,7 +541,7 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 
 - **Docker 全栈部署**：[DEPLOY.md](DEPLOY.md) — 推荐方式，包含服务编排、环境变量、故障排查
 - **本地开发**：见 [快速开始 - 方式二](#方式二本地开发运行)
-- **Windows 快速启动**：双击 `start.bat`（会自动启动主应用和所有 MCP Server）
+- **Windows 本地运行**：见 [方式二 - 本地开发运行](#方式二本地开发运行)，手动启动主应用与所需 MCP Server
 
 ---
 
@@ -607,13 +606,9 @@ DASHSCOPE_API_KEY=sk-your-deepseek-key
 `ChatOpenAI` 兼容所有 OpenAI 接口规范的 API。
 </details>
 
-<details>
-<summary><b>Q: Windows 双击 start.bat 报错怎么办？</b></summary>
-
-这是编码问题。需要用 **ANSI/GBK 编码**重新保存 `start.bat`（VS Code 右下角 → 编码 → 通过编码保存 → GBK），并删除 `chcp 65001` 行。
-</details>
-
 ---
+
+
 
 ## License
 

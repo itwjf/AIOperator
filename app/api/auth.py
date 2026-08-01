@@ -16,20 +16,44 @@ from app.core.logger import logger
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _build_redirect_uri(request: Request) -> str:
+    """根据实际请求的 Host 动态生成回调地址，避免 localhost/127.0.0.1 域名不一致。
+
+    - 优先使用请求的 host（与浏览器访问域名一致，cookie 才能对上）。
+    - 若配置了 github_redirect_uri 且是完整地址，则保留配置（用于生产/公网域名）。
+    """
+    configured = (settings.github_redirect_uri or "").strip()
+    # 配置的地址不带域名部分（如 "/api/auth/github/callback"）或为空时，用请求 host 拼接
+    if not configured.startswith("http"):
+        scheme = request.url.scheme
+        host = request.headers.get("host", "")
+        base = configured if configured.startswith("/") else "/api/auth/github/callback"
+        return f"{scheme}://{host}{base}"
+    return configured
+
+
 @router.get("/github/login")
 @limiter.limit("10/minute")
-async def github_login():
+async def github_login(request: Request):
     """重定向到 GitHub 授权页。"""
     state = secrets.token_urlsafe(32)
+    redirect_uri = _build_redirect_uri(request)
     redirect_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={settings.github_client_id}"
-        f"&redirect_uri={settings.github_redirect_uri}"
+        f"&redirect_uri={redirect_uri}"
         f"&scope=user:email"
         f"&state={state}"
     )
     response = RedirectResponse(url=redirect_url)
-    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600)
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        samesite="lax",
+        secure=False,
+    )
     return response
 
 
@@ -100,7 +124,9 @@ async def github_callback(code: str, state: str, request: Request):
         conn.close()
 
     jwt_token = create_access_token(user_id, username=username)
-    response = RedirectResponse(url=f"/static/index.html?token={jwt_token}")
+    # 登录成功后跳转前端根路径，由前端 handleOAuthCallback 消费 ?token=
+    # SPA 由 FastAPI serve frontend/dist 在根路径
+    response = RedirectResponse(url=f"/?token={jwt_token}")
     response.delete_cookie("oauth_state")
     return response
 

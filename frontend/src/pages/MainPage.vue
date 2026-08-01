@@ -61,14 +61,19 @@ async function loadSessions() {
   } catch (e) { /* API 不可用时降级为默认会话 */ }
 }
 
+// 前端 mode 值 → 后端合法 agent_type 的映射
+const AGENT_TYPE_MAP = { chat: 'rag', agent: 'manual', mcp: 'mcp', aiops: 'aiops' };
+
 function newSession() {
   const id = 'sess-' + Date.now();
-  sessions.value.unshift({ session_id: id, title: `会话 ${sessions.value.length + 1}`, agent_type: chatMode.value });
+  const agentType = AGENT_TYPE_MAP[chatMode.value] || chatMode.value;
+  const title = `会话 ${sessions.value.length + 1}`;
+  sessions.value.unshift({ session_id: id, title, agent_type: agentType });
   currentSessionId.value = id;
   chatPanel.value?.clearMessages();
   apiRequest('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify({ session_id: id, agent_type: chatMode.value }),
+    body: JSON.stringify({ session_id: id, agent_type: agentType, title }),
   }).catch(() => {});
 }
 

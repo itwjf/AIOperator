@@ -50,7 +50,10 @@ def _persist_chat(
     except Exception:
         # 落库失败不影响对话主流程
         from app.core.logger import logger
-        logger.warning("对话落库失败 user_id=%s session=%s", user_id, session_id, exc_info=True)
+        logger.warning(
+            "对话落库失败 user_id=%s session=%s agent_type=%s",
+            user_id, session_id, agent_type, exc_info=True,
+        )
 
 
 # === 请求模型 ===

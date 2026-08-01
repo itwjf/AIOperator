@@ -99,16 +99,25 @@ def _repair_orphan_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
     while i >= 0:
         msg = result[i]
         if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
-            num_calls = len(msg.tool_calls)
-            # 数紧随其后的 ToolMessage
+            # 收集该 AIMessage 实际发出的 tool_call_id 集合
+            call_ids = {tc.get("id") for tc in msg.tool_calls if tc.get("id")}
+            # 统计紧随其后、且 tool_call_id 确实匹配的 ToolMessage
             following = 0
             j = i + 1
             while j < len(result) and isinstance(result[j], ToolMessage):
-                following += 1
+                if getattr(result[j], "tool_call_id", None) in call_ids:
+                    following += 1
                 j += 1
-            if following < num_calls:
-                # 孤立的 AIMessage(tool_calls)，删掉它
+            if following < len(call_ids):
+                # 孤立的 AIMessage(tool_calls)：删除它，
+                # 并连带删除紧跟其后、真正属于它的 ToolMessage（避免残留孤儿）
                 del result[i]
+                j = i
+                while j < len(result) and isinstance(result[j], ToolMessage):
+                    if getattr(result[j], "tool_call_id", None) in call_ids:
+                        del result[j]
+                    else:
+                        j += 1
         i -= 1
 
     return result

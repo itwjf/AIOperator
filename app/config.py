@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
     github_redirect_uri: str = "http://127.0.0.1:9900/api/auth/github/callback"
+    # GitHub 授权页 prompt 行为：
+    #   - "select_account"（默认）：每次登录弹出账号选择器，便于切换账号
+    #   - "login"：强制要求重新输入密码
+    #   - 空字符串：静默复用当前登录态（单账号场景无多余一步）
+    github_oauth_prompt: str = "select_account"
 
     # ---- MCP 安全配置 ----
     mcp_secret_token: str = ""

@@ -77,10 +77,11 @@ def delete_session(user_id: int, session_id: str) -> bool:
                 "DELETE FROM sessions WHERE user_id=%s AND session_id=%s",
                 (user_id, session_id),
             )
+            affected = cursor.rowcount
         conn.commit()
     finally:
         conn.close()
-    return True
+    return affected > 0
 
 
 def update_session_title(user_id: int, session_id: str, title: str) -> bool:

@@ -38,13 +38,17 @@ async def github_login(request: Request):
     """重定向到 GitHub 授权页。"""
     state = secrets.token_urlsafe(32)
     redirect_uri = _build_redirect_uri(request)
+    # prompt 行为可配置：默认 select_account（允许切号），
+    # 可在 settings 中配置（如空字符串）以恢复单账号静默登录
+    prompt = settings.github_oauth_prompt
+    prompt_q = f"&prompt={prompt}" if prompt else ""
     redirect_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={settings.github_client_id}"
         f"&redirect_uri={redirect_uri}"
         f"&scope=user:email"
         f"&state={state}"
-        f"&prompt=select_account"
+        f"{prompt_q}"
     )
     response = RedirectResponse(url=redirect_url)
     response.set_cookie(

@@ -14,6 +14,8 @@
 import asyncio
 from langchain_core.tools import tool
 from app.services.vector_store_manager import similarity_search
+from app.tools._fault import unavailable_hint
+from app.core.logger import logger
 
 
 def _format_search_results(results: list[dict]) -> str:
@@ -55,8 +57,15 @@ def retrieve_knowledge(query: str) -> tuple[str, list[dict]]:
 
     返回：
         (格式化文本, 原始文档列表)
+        当知识库服务不可用时，返回 (不可用提示, [])，而不是抛异常，
+        让 Agent 能自主选择其他处理方式。
     """
-    # @tool 装饰器默认包装同步函数，内部用 asyncio.run 调异步方法
-    results = asyncio.run(similarity_search(query, k=5))
-    formatted = _format_search_results(results)
-    return formatted, results
+    try:
+        # @tool 装饰器默认包装同步函数，内部用 asyncio.run 调异步方法
+        results = asyncio.run(similarity_search(query, k=5))
+        formatted = _format_search_results(results)
+        return formatted, results
+    except Exception as e:  # noqa: BLE001 - 工具层兜底所有异常，转成友好提示
+        logger.warning("知识库检索失败，已返回不可用提示: {}", e)
+        # 不写死"改用某个工具"，只声明"知识库不可用"，由 Agent 根据实际情况决策
+        return unavailable_hint("知识库检索"), []

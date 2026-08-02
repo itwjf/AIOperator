@@ -117,3 +117,26 @@ class MCPServiceError(AIOperatorException):
             message="远程工具服务暂时不可用，部分功能可能受限",
             detail=detail,
         )
+
+
+# === 工具容错相关 ===
+
+
+class ToolUnavailableError(AIOperatorException):
+    """工具依赖的外部服务不可用（如知识库、shell 命令环境）。
+
+    这是「工具层」和「Agent 层」之间的语义化约定：
+      工具在捕获底层异常后，转为抛出 ToolUnavailableError；
+      Agent（system prompt + 逻辑）据此识别"工具不可用"信号，
+      从而自主决定：改用其他工具 / 基于已有信息回答 / 如实告知用户。
+
+    与 VectorDBError 的区别：
+      VectorDBError 用于向量库技术故障的上抛；ToolUnavailableError
+      是工具对调用方（Agent）的通用"当前不可用"信号，覆盖范围更广。
+    """
+
+    def __init__(self, detail: str = ""):
+        super().__init__(
+            message="该工具当前不可用，请根据实际情况选择其他方式继续处理",
+            detail=detail,
+        )

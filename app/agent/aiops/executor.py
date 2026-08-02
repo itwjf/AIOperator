@@ -17,9 +17,10 @@ from langchain_core.messages import HumanMessage
 from app.core.llm_factory import create_llm
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.time_tool import get_current_time
+from app.tools.shell_tool import execute_shell
 
 # 执行器可用的工具
-EXECUTOR_TOOLS = [retrieve_knowledge, get_current_time]
+EXECUTOR_TOOLS = [retrieve_knowledge, get_current_time, execute_shell]
 
 # 执行器子 Agent（单例）
 _executor_agent = None
@@ -29,8 +30,15 @@ EXECUTOR_SYSTEM_PROMPT = """你是一个 SRE 运维专家，正在执行诊断�
 你会收到需要执行的步骤描述，请：
   1. 根据步骤描述，选择合适的工具来获取信息
   2. 如果步骤涉及知识检索，用 retrieve_knowledge 工具
-  3. 如果需要时间信息，用 get_current_time 工具
-  4. 执行完给出简洁的结果描述，说明发现了什么
+  3. 如果需要查看系统状态/资源/进程/网络，用 execute_shell 工具执行只读诊断命令
+  4. 如果需要时间信息，用 get_current_time 工具
+  5. 执行完给出简洁的结果描述，说明发现了什么
+
+工具容错（重要）：
+- 当某个工具返回「[工具不可用]」「[执行失败]」「[超时]」「连接失败」等不可用信号时，
+  不要反复重试同一工具，也不要因此卡住。
+- 请根据当前步骤需求自主决策：改用其他可用工具 / 基于已有信息继续 / 如实记录不可用。
+- 例如知识库检索不可用时，可改用 execute_shell 直接查询系统现状来完成当前步骤。
 
 注意：
   - 只执行当前这一个步骤，不要尝试执行整个计划

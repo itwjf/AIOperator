@@ -8,6 +8,7 @@ Shell 命令执行工具 — 安全地执行操作系统诊断命令（只读操
   第 4 层：结果包装  → stdout/stderr 分别标注，返回退出码，超时/异常返回友好错误
 """
 
+import os
 import re
 import shlex
 import subprocess
@@ -16,7 +17,12 @@ from app.config import settings
 from langchain_core.tools import tool
 
 # === 第 1 层：命令白名单 ===
+# 同时支持 Unix 和 Windows 的只读诊断命令，
+# 用 os.name 判断当前平台，Windows 额外放行一批只读命令。
 
+IS_WINDOWS = os.name == "nt"
+
+# Unix / 跨平台只读命令
 ALLOWED_COMMANDS: set[str] = {
     # 系统信息
     "uname", "hostname", "uptime", "whoami", "id",
@@ -38,6 +44,25 @@ ALLOWED_COMMANDS: set[str] = {
     # Docker（只读子命令单独校验）
     "docker",
 }
+
+# Windows 专用只读命令（仅当 IS_WINDOWS 为 True 时放行）
+WINDOWS_ALLOWED_COMMANDS: set[str] = {
+    # 系统信息
+    "systeminfo", "ver", "hostname",
+    # 进程管理
+    "tasklist",
+    # 资源监控（typeperf 是只读计数器查询）
+    "typeperf",
+    # 磁盘/目录
+    "dir", "vol", "fsutil", "driverquery",
+    # 网络
+    "ipconfig", "pathping", "tracert", "net", "netsh",
+    # 文件查看（findstr 类似 grep）
+    "findstr", "more", "type",
+}
+
+if IS_WINDOWS:
+    ALLOWED_COMMANDS |= WINDOWS_ALLOWED_COMMANDS
 
 # Docker 允许的只读子命令
 ALLOWED_DOCKER_SUBCOMMANDS: set[str] = {
@@ -89,7 +114,11 @@ def _validate_command(command: str) -> str | None:
 
     # ---- 2c: 第 1 层 — 基础命令白名单 ----
     if base_cmd not in ALLOWED_COMMANDS:
-        return f"不允许执行 '{base_cmd}' 命令，仅允许诊断/查看类命令"
+        return (
+            f"不允许执行 '{base_cmd}' 命令。当前环境为"
+            f"{'Windows' if IS_WINDOWS else 'Unix/Linux'}，"
+            "仅允许诊断/查看类命令（见工具描述中的支持命令列表）。"
+        )
 
     # ---- 2d: 管道数量检查（≤3）----
     # 重新用原字符串统计引号外的管道符
@@ -160,11 +189,17 @@ def execute_shell(command: str) -> str:
     """安全地执行操作系统诊断命令（只读操作）。
 
     使用场景：
-      - 用户问「CPU 使用率多少」「内存还剩多少」→ top, free
-      - 用户问「磁盘满了没」→ df -h
+      - 用户问「CPU 使用率多少」「内存还剩多少」→ top, free（Windows: typeperf, tasklist）
+      - 用户问「磁盘满了没」→ df -h（Windows: dir, fsutil）
       - 用户问「网络通不通」→ ping -c 3 8.8.8.8, curl -I https://example.com
       - 用户问「容器运行状态」→ docker ps, docker stats --no-stream
       - 用户问「系统日志有什么异常」→ journalctl -n 50 --no-pager
+      - Windows 环境：tasklist / systeminfo / ipconfig / netstat / dir / typeperf
+
+    平台提示：
+      - 命令会随运行环境不同而不同（Unix vs Windows）。
+      - 若执行时返回「命令未找到」，请按当前平台改用其他只读命令，
+        不要误判系统异常，也不要反复重试同一命令。
 
     安全限制：
       - 仅允许执行白名单内的命令（诊断/查看类）
@@ -173,7 +208,8 @@ def execute_shell(command: str) -> str:
       - 输出超过 5000 字符自动截断
 
     参数：
-        command: 完整的 shell 命令，如 "free -h"、"ps aux | head -20"。
+        command: 完整的 shell 命令，如 "free -h"、"ps aux | head -20"、
+                 "tasklist"、"systeminfo"。
                  支持管道（最多 3 个），不支持重定向（> >> <）。
 
     返回：
@@ -226,7 +262,16 @@ def execute_shell(command: str) -> str:
         return f"[超时] 命令执行超过 {timeout} 秒已被终止"
 
     except FileNotFoundError:
-        return f"[错误] 命令未找到: {shlex.split(command)[0]}"
+        cmd_name = shlex.split(command)[0]
+        hint = ""
+        if IS_WINDOWS:
+            hint = "（当前为 Windows 环境，该 Unix 命令不可用）"
+        else:
+            hint = "（当前为 Unix/Linux 环境，该命令不存在）"
+        return (
+            f"[工具不可用] 命令未找到: {cmd_name} {hint}。"
+            "请根据当前平台选择可用的只读诊断命令，不要因此认为系统异常。"
+        )
 
     except Exception as e:
         return f"[错误] 命令执行异常: {e}"

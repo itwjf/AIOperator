@@ -18,9 +18,10 @@ from app.core.llm_factory import create_llm
 from app.services.vector_store_manager import similarity_search
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.time_tool import get_current_time
+from app.tools.shell_tool import execute_shell
 
 # 执行器可用的工具列表（规划器需要知道有哪些工具可用）
-AVAILABLE_TOOLS = [retrieve_knowledge, get_current_time]
+AVAILABLE_TOOLS = [retrieve_knowledge, get_current_time, execute_shell]
 
 
 class Plan(BaseModel):
@@ -43,10 +44,15 @@ def _format_tools() -> str:
 PLANNER_SYSTEM_PROMPT = """你是一个 SRE 运维专家。你的职责是**制定诊断计划**，而不是执行。
 
 根据用户的问题描述，制定一个分步的诊断计划。每个步骤应该：
-  1. 具体可执行（不是「分析问题」这种空话，而是「用 retrieve_knowledge 搜索 CPU 高排查文档」）
-  2. 合理利用可用工具（检索知识库、获取当前时间等）
+  1. 具体可执行（不是「分析问题」这种空话，而是「用 retrieve_knowledge 搜索 CPU 高排查文档」
+     或「用 execute_shell 执行 top/free 查看系统资源」）
+  2. 合理利用可用工具（检索知识库、获取当前时间、执行只读诊断命令等）
   3. 按逻辑顺序排列（先定位现象 → 再深入原因 → 最后给出建议）
   4. 每步只做一件事
+
+规划提示：
+  - 查看系统现状（CPU/内存/进程/网络）的步骤，应使用 execute_shell 工具。
+  - 技术排查方法、最佳实践、内部文档的步骤，使用 retrieve_knowledge 工具。
 
 可用工具：
 {tools_description}

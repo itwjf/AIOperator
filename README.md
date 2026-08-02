@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**从零复刻的 LangChain Agent 学习项目 | RAG + Agent + MCP 全栈智能平台**
+**RAG + Agent + MCP 全栈 AI 智能助手平台**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
@@ -25,7 +25,7 @@
 - [API 文档](#api-文档)
 - [使用场景](#使用场景)
 - [技术栈](#技术栈)
-- [学习路线](#学习路线)
+- [架构设计要点](#架构设计要点)
 - [部署指南](#部署指南)
 - [常见问题](#常见问题)
 - [License](#license)
@@ -34,9 +34,9 @@
 
 ## 项目简介
 
-**AIOperator** 是一个从零复刻的 **LangChain Agent** 学习项目，定位为 **全能 AI 智能助手**。它完整实现了 RAG 检索增强生成、Agent 工具调用、Plan-Execute-Replan 自动诊断工作流、数据库查询、PPT 生成以及 MCP（Model Context Protocol）远程工具集成。
+**AIOperator** 是一个基于 **LangChain** 的 **全能 AI 智能助手**。它完整实现了 RAG 检索增强生成、Agent 工具调用、Plan-Execute-Replan 自动诊断工作流、数据库查询、PPT 生成以及 MCP（Model Context Protocol）远程工具集成。
 
-项目的核心理念是 **"理解底层，不依赖黑盒"**—— 不仅使用 LangChain 的高级封装 `create_agent`，还手动用 `StateGraph` + `ToolNode` + `bind_tools` 搭建了完全等价的 Agent 图，让开发者深入理解 Agent 的运作机制。
+项目的设计理念是 **"理解底层，不依赖黑盒"**—— 不仅使用 LangChain 的高级封装 `create_agent`，还手动用 `StateGraph` + `ToolNode` + `bind_tools` 搭建了完全等价的 Agent 图，让整个 Agent 的运作机制清晰可控。
 
 > 🎯 **适用场景**: 智能问答、知识库检索、Agent 工作流、自动诊断、MCP 工具集成、PPT 报告生成
 
@@ -53,7 +53,7 @@
 | 模式 | 实现方式 | API 路径 | 适用场景 |
 |------|---------|---------|---------|
 | **RAG Agent** | `create_agent`（黑盒封装） | `/api/chat` | 快速集成，开箱即用 |
-| **Manual Agent** | `StateGraph` + `ToolNode`（手动搭建） | `/api/agent/chat` | 学习原理，深度定制 |
+| **Manual Agent** | `StateGraph` + `ToolNode`（手动搭建） | `/api/agent/chat` | 透明可控，深度定制 |
 
 两种模式功能完全等价，前者胜在简洁，后者胜在透明可控。
 
@@ -115,29 +115,6 @@ Agent 可同时使用本地工具和远程 MCP 工具，对工具来源完全透
 
 ### 🐳 Docker 一键部署
 全栈容器化，一条命令拉起所有服务（FastAPI + 5 MCP Server + MySQL + Milvus）。详见 [部署指南](#部署指南)。
-
----
-
-## 📊 开发进度
-
-### SPEC 执行状态（2026-06-26 更新）
-
-| SPEC 文档 | 状态 | 进度 | 说明 |
-|-----------|:----:|:----:|------|
-| [SPEC_TOOLS.md](SPEC_TOOLS.md) | ✅ **已完成** | 100% | 3 类 10 个新工具全部开发完成 |
-
-<details>
-<summary><b>SPEC_TOOLS.md — 已完成详情（点击展开）</b></summary>
-
-| 阶段 | 工具 | 核心文件 | 验收 |
-|:----:|------|------|:--:|
-| 1 | `execute_shell` | [app/tools/shell_tool.py](app/tools/shell_tool.py) | ✅ 四层安全防护通过 |
-| 2 | Docker 管理 (7 工具) | [mcp_servers/docker_server.py](mcp_servers/docker_server.py) | ✅ 启动端口 8006 |
-| 3 | Web 搜索 (2 工具) | [mcp_servers/search_server.py](mcp_servers/search_server.py) | ✅ 启动端口 8007 |
-
-配套变更：`config.py`（+4 字段）、`pyproject.toml`（+3 依赖）、`docker-compose.yml`（+2 服务）、`.env` / `.env.example`（+5 变量）、3 个 Agent Service SYSTEM_PROMPT 已同步更新。
-
-</details>
 
 ---
 
@@ -520,11 +497,11 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 
 ---
 
-## 学习路线
+## 架构设计要点
 
-本项目按阶段构建，每个阶段对应 LangChain/LangGraph 的一个核心概念：
+本项目按模块构建，每个模块对应 LangChain/LangGraph 的一个核心概念：
 
-| 阶段 | 主题 | 关键文件 | 核心概念 |
+| 模块 | 主题 | 关键文件 | 核心概念 |
 |:----:|------|------|------|
 | 1 | **项目骨架** | `main.py`, `config.py` | FastAPI 路由、pydantic-settings |
 | 2 | **LLM 集成** | `llm_factory.py` | DashScope OpenAI 兼容接口、temperature |
@@ -582,7 +559,7 @@ DashScope 提供了 OpenAI 兼容接口，`ChatOpenAI` 可以直接对接。这�
 <details>
 <summary><b>Q: 为什么 MemorySaver 用内存存储？</b></summary>
 
-学习阶段使用 `MemorySaver`（内存存储）是为了降低复杂度。**生产环境应替换为 `SqliteSaver` 或 `PostgresSaver`**，以保证服务重启后对话历史不丢失。
+默认使用 `MemorySaver`（内存存储）以降低部署复杂度。**生产环境应替换为 `SqliteSaver` 或 `PostgresSaver`**，以保证服务重启后对话历史不丢失。
 
 ```python
 # 生产环境示例

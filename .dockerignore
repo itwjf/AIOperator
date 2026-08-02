@@ -10,6 +10,10 @@ dist/
 venv/
 .pytest_cache/
 
+# 前端（构建阶段会重新 npm install + build，避免本地产物污染镜像）
+frontend/node_modules/
+frontend/dist/
+
 # IDE
 .vscode/
 .idea/

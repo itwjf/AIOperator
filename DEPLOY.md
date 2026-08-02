@@ -59,7 +59,7 @@ cd AIOperator
 cp .env.example .env
 ```
 
-编辑 `.env`，**至少填写以下两项**：
+编辑 `.env`，**至少填写以下三项**：
 
 ```bash
 # LLM API Key（必填）
@@ -67,6 +67,14 @@ DASHSCOPE_API_KEY=sk-your-real-api-key-here
 
 # MySQL root 密码（本地部署时修改，生产环境使用强密码）
 DB_PASSWORD=your-strong-password
+
+# GitHub OAuth（登录必需，前往 https://github.com/settings/developers 创建 OAuth App）
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_REDIRECT_URI=http://localhost:9900/api/auth/github/callback
+
+# JWT 签名密钥（登录必需）
+JWT_SECRET_KEY=your-random-secret
 ```
 
 > 其余配置项已有合理默认值，一般不需要修改。完整配置项见 [环境变量说明](#环境变量说明)。
@@ -78,9 +86,12 @@ docker compose up -d
 ```
 
 首次启动会自动：
-1. 拉取基础镜像（`python:3.11-slim`、`mysql:8.0`、`milvusdb/milvus:v2.4.17`）
-2. 构建 AIOperator 应用镜像（安装 195 个 Python 依赖）
-3. 启动所有服务
+1. 拉取基础镜像（`node:20-slim`、`python:3.11-slim`、`mysql:8.0`、`milvusdb/milvus:v2.4.17`）
+2. **构建 Vue 前端**（`npm run build` → 产出 `dist/`，多阶段构建，不需要你手动操作）
+3. 构建 AIOperator 应用镜像（安装 195 个 Python 依赖）
+4. 启动所有服务
+
+> **前端采用"开发分离、生产一体"架构**：开发时用 Vite（`:5173`）独立调试；生产构建由 Dockerfile 自动完成，前端 `dist/` 直接打进镜像，由 FastAPI 在 `:9900` 静态托管，无需独立前端容器。
 
 预计耗时：首次 3–5 分钟，后续增量构建只需 20–30 秒。
 
@@ -99,6 +110,8 @@ aioperator-app         Up
 aioperator-mcp-time    Up
 aioperator-mcp-db      Up
 aioperator-mcp-ppt     Up
+aioperator-mcp-docker  Up
+aioperator-mcp-search  Up
 aioperator-mysql       Up (healthy)
 aioperator-milvus      Up (healthy)
 ```
@@ -115,8 +128,9 @@ curl http://localhost:9900/health
 ### 第五步：使用前端
 
 1. 打开 `http://localhost:9900`
-2. 上传运维文档到知识库（侧边栏 → 📄 上传文档）
-3. 选择任意模式开始对话
+2. 点击「GitHub 登录」，授权后进入主界面（需已在 `.env` 正确配置 GitHub OAuth）
+3. 上传运维文档到知识库（侧边栏 → 📄 上传文档）
+4. 选择任意模式开始对话
 
 ---
 
@@ -142,14 +156,14 @@ curl http://localhost:9900/health
                  │:19530  │ │:3306 │ │Server │
                  └────────┘ └──────┘ └───────┘
                                              │
-                    ┌────────────┬───────────┼───────────┬────────────┐
-                    │            │           │           │            │
-                    ▼            ▼           ▼           ▼            ▼
-              ┌──────────┐ ┌──────────┐ ┌──────────┐
-              │mcp-time  │ │mcp-db    │ │mcp-ppt   │
-              │:8003     │ │:8004     │ │:8005     │
-              │时间查询   │ │只读SQL   │ │PPT 生成   │
-              └──────────┘ └──────────┘ └──────────┘
+                    ┌────────────┬───────────┼───────────┬────────────┬────────────┐
+                    │            │           │           │            │            │
+                    ▼            ▼           ▼           ▼            ▼            ▼
+              ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+              │mcp-time  │ │mcp-db    │ │mcp-ppt   │ │mcp-docker│ │mcp-search│
+              │:8003     │ │:8004     │ │:8005     │ │:8006     │ │:8007     │
+              │时间查询   │ │只读SQL   │ │PPT 生成   │ │Docker 管理│ │Web 搜索   │
+              └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘
 ```
 
 ### 服务清单
@@ -161,6 +175,8 @@ curl http://localhost:9900/health
 | **MCP Time** | `aioperator-mcp-time` | 本机构建 | 8003 |
 | **MCP DB** | `aioperator-mcp-db` | 本机构建 | 8004 |
 | **MCP PPT** | `aioperator-mcp-ppt` | 本机构建 | 8005 |
+| **MCP Docker** | `aioperator-mcp-docker` | 本机构建 | 8006 |
+| **MCP Search** | `aioperator-mcp-search` | 本机构建 | 8007 |
 | **Main App** | `aioperator-app` | 本机构建 | 9900 |
 
 ### 依赖关系
@@ -170,6 +186,8 @@ app ──depends_on──▶ milvus (healthy)
 app ──depends_on──▶ mcp-time (started)
 app ──depends_on──▶ mcp-db (started)
 app ──depends_on──▶ mcp-ppt (started)
+app ──depends_on──▶ mcp-docker (started)
+app ──depends_on──▶ mcp-search (started)
 mcp-db ──depends_on──▶ mysql (healthy)
 ```
 
@@ -216,6 +234,23 @@ mcp-db ──depends_on──▶ mysql (healthy)
 | `MCP_TIME_URL` | `http://mcp-time:8003/mcp` | 时间服务地址 |
 | `MCP_DB_URL` | `http://mcp-db:8004/mcp` | 数据库服务地址 |
 | `MCP_PPT_URL` | `http://mcp-ppt:8005/mcp` | PPT 服务地址 |
+| `MCP_DOCKER_URL` | `http://mcp-docker:8006/mcp` | Docker 管理服务地址 |
+| `MCP_SEARCH_URL` | `http://mcp-search:8007/mcp` | Web 搜索服务地址 |
+
+### 认证与安全配置
+
+| 变量 | 默认值 | 说明 |
+|------|------|------|
+| `JWT_SECRET_KEY` | — | **必填**，JWT 签名密钥（`python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成） |
+| `JWT_ALGORITHM` | `HS256` | JWT 签名算法 |
+| `JWT_EXPIRE_HOURS` | `24` | access_token 过期时间（小时） |
+| `GITHUB_CLIENT_ID` | — | **GitHub OAuth App** 的 Client ID |
+| `GITHUB_CLIENT_SECRET` | — | **GitHub OAuth App** 的 Client Secret |
+| `GITHUB_REDIRECT_URI` | `http://127.0.0.1:9900/api/auth/github/callback` | OAuth 回调地址（生产改为主域名） |
+| `MCP_SECRET_TOKEN` | — | MCP Server 通信密钥 |
+| `GITHUB_OAUTH_PROMPT` | `select_account` | GitHub 授权页行为（`select_account`/`login`/空） |
+
+> **GitHub OAuth App 配置**：前往 [GitHub Developer Settings](https://github.com/settings/developers) 创建 OAuth App，Authorization callback URL 填 `GITHUB_REDIRECT_URI`。
 
 ### 应用配置
 
@@ -249,8 +284,27 @@ docker compose up -d mysql milvus
 python mcp_servers/time_server.py    # Port 8003
 python mcp_servers/db_server.py     # Port 8004
 python mcp_servers/ppt_server.py    # Port 8005
+python mcp_servers/docker_server.py # Port 8006
+python mcp_servers/search_server.py # Port 8007
 uvicorn app.main:app --reload --port 9900  # 主应用（热重载）
 ```
+
+#### 前端开发模式（开发分离）
+
+开发时前端用 Vite 独立运行（`:5173`，支持 HMR 热更新），请求 `/api` 自动代理到后端 `:9900`：
+
+```bash
+# 首次安装依赖
+cd frontend
+npm install
+
+# 启动 Vite dev server（:5173）
+npm run dev
+```
+
+开发时浏览器访问 **http://127.0.0.1:5173**，前端改动即时生效，无需手动构建。
+
+> 生产部署则不需要手动构建——Dockerfile 多阶段构建会自动执行 `npm run build`，把前端打进镜像。
 
 ### 数据库初始化
 
@@ -313,6 +367,8 @@ docker compose logs -f app
 docker compose logs -f mcp-db
 docker compose logs -f mcp-time
 docker compose logs -f mcp-ppt
+docker compose logs -f mcp-docker
+docker compose logs -f mcp-search
 
 # 查看 MySQL 日志
 docker compose logs mysql
@@ -373,7 +429,7 @@ docker rm -f milvus-etcd milvus-minio  # 如果有旧容器
 
 ```bash
 # 查看端口占用（Windows）
-netstat -ano | findstr "3306 8003 8004 8005 9900 19530"
+netstat -ano | findstr "3306 8003 8004 8005 8006 8007 9900 19530"
 
 # 修改 .env 中的端口配置
 APP_PORT=9901
@@ -427,7 +483,7 @@ curl -X POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions 
 docker compose down -v
 
 # 清理镜像
-docker rmi aioperator-app aioperator-mcp-time aioperator-mcp-db aioperator-mcp-ppt
+docker rmi aioperator-app aioperator-mcp-time aioperator-mcp-db aioperator-mcp-ppt aioperator-mcp-docker aioperator-mcp-search
 
 # 重新开始
 docker compose up -d
@@ -444,11 +500,15 @@ docker compose up -d
 #    .env 中的 DB_PASSWORD 必须改为强密码
 #    不要使用 root123、admin 等弱密码
 
-# 2. 关闭对外端口
+# 2. 配置随机密钥
+#    JWT_SECRET_KEY 与 MCP_SECRET_TOKEN 必须替换为随机字符串（secrets.token_urlsafe(48)）
+#    GitHub OAuth 的 Client Secret 不要泄露
+
+# 3. 关闭对外端口
 #    在 docker-compose.yml 中，不需要对外暴露的端口去掉 "8080:8080" 映射
 #    只保留 app 的 9900 端口供反向代理使用
 
-# 3. 使用外部 MySQL/Milvus
+# 4. 使用外部 MySQL/Milvus
 #    将 docker-compose.yml 中的 mysql/milvus 服务注释掉
 #    在 .env 中填写已部署的数据库地址
 ```
@@ -534,6 +594,8 @@ curl -s http://localhost:9900/health
 curl -s http://localhost:8003/health
 curl -s http://localhost:8004/health
 curl -s http://localhost:8005/health
+curl -s http://localhost:8006/health
+curl -s http://localhost:8007/health
 
 # 设置 cron 定时检查
 */5 * * * * curl -sf http://localhost:9900/health || echo "AIOperator is down" | mail -s "Alert" admin@example.com

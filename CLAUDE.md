@@ -278,7 +278,7 @@ cd frontend
 npm install
 
 # 开发启动（:5173，代理到 FastAPI :9900）
-npm run dev
+npm run dev    # 访问 http://127.0.0.1:5173（用 127.0.0.1 而非 localhost，否则 OAuth 登录 CSRF 失败）
 
 # 生产构建
 npm run build    # 输出到 frontend/dist/

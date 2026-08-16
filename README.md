@@ -201,6 +201,7 @@ docker compose ps
 | 依赖 | 版本 | 说明 |
 |------|------|------|
 | Python | ≥ 3.11 | 运行环境 |
+| Node.js | 20 + npm | 前端构建（Vite + Vue 3） |
 | MySQL | 8.0 | 关系型数据库（DB MCP Server 需要，可选） |
 | Milvus | ≥ 2.4 | 向量数据库（可选） |
 | DashScope API Key | — | 阿里云百炼平台（LLM + Embedding） |
@@ -221,6 +222,11 @@ pip install -e .
 # 3. 配置环境变量（从模板复制，填入真实 API Key）
 cp .env.example .env
 # 编辑 .env，修改 DASHSCOPE_API_KEY 为你的真实 Key
+
+# 4. 安装前端依赖（Vue 3 + Vite，仅首次需要）
+cd frontend
+npm install
+cd ..
 ```
 
 > 💡 **获取 API Key**: 前往 [阿里云百炼平台](https://bailian.console.aliyun.com/) 开通 DashScope 服务。
@@ -274,9 +280,14 @@ python mcp_servers/search_server.py       # :8007
 # 终端 6：主应用（--reload 热重载）
 python app/main.py                        # :9900
 # 或 uvicorn app.main:app --host 127.0.0.1 --port 9900 --reload
+
+# 终端 7：前端（Vite dev server，自动代理 API 到 :9900）
+cd frontend && npm run dev                # :5173
 ```
 
-浏览器打开 **http://127.0.0.1:9900**，API 文档见 **http://127.0.0.1:9900/docs**。
+浏览器打开：
+- **前端开发地址**：http://127.0.0.1:5173（Vite 自动代理 `/api`、`/health` 到 :9900）
+- **后端 API**：http://127.0.0.1:9900，API 文档见 http://127.0.0.1:9900/docs
 
 #### 上传知识库文档
 
@@ -333,9 +344,14 @@ AIOperator/
 │   ├── ppt_builder.py             #   PPT 渲染引擎（python-pptx）
 │   ├── docker_server.py           #   Docker 管理服务（FastMCP, Port 8006）🆕
 │   └── search_server.py           #   Web 搜索服务（FastMCP, Port 8007）🆕
-├── frontend/                      # 前端源码（Vue 3 + Vite）
+├── frontend/                      # 前端源码（Vue 3 SFC + Vite）
 │   ├── src/                       #   应用源码
+│   │   ├── pages/                 #     路由级页面（LoginPage / MainPage）
+│   │   ├── components/            #     可复用组件（ChatPanel / Sidebar 等）
+│   │   ├── utils/                 #     工具函数（api / auth / config）
+│   │   └── router/                #     Vue Router 路由配置
 │   ├── dist/                      #   构建产物（npm run build 生成）
+│   ├── vite.config.js             #   Vite 配置（dev 代理 → FastAPI）
 │   └── package.json               #   前端依赖与脚本
 ├── aiops-docs/                    # 上传文档存储目录
 ├── Dockerfile                     # Docker 镜像构建文件
@@ -490,7 +506,7 @@ curl -X POST http://127.0.0.1:9900/api/mcp/chat \
 | **PPT 生成** | python-pptx | PowerPoint 文件创建和渲染 |
 | **Docker SDK** 🆕 | docker-py ≥ 7.0 | Docker 容器/镜像管理 |
 | **Web 搜索** 🆕 | Tavily + DuckDuckGo | 互联网搜索（双后端自愈降级） |
-| **前端** | Vue 3 (CDN) + marked.js + highlight.js | SPA 交互界面 |
+| **前端** | Vite + Vue 3 SFC + Vue Router（marked.js + highlight.js） | SPA 交互界面，HMR 热更新 |
 | **配置管理** | pydantic-settings | 类型安全的配置加载 |
 | **日志** | loguru | 结构化日志 |
 | **容器化** | Docker + Docker Compose | 一键部署、环境隔离 |

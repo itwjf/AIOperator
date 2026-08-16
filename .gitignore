@@ -54,7 +54,11 @@ debug_tools.log
 
 # 架构决策文档（内部参考，不对外）
 架构决策与部署方案.md
-AI对话流式响应架构设计指南.md
+plan/AI对话流式响应架构设计指南.md
+
+# 开发过程遗留文档（已移至 plan/，不上传远程）
+plan/SPEC_*.md
+plan/TROUBLESHOOTING.md
 
 # 系统文件
 .DS_Store

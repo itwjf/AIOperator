@@ -22,6 +22,7 @@ from app.core.llm_factory import create_llm
 from app.core.message_trimmer import trim_conversation_history, MessageTrimmerMiddleware
 from app.core.checkpoint import get_checkpointer
 from app.core.exceptions import AIOperatorException
+from app.core.logger import logger
 from app.tools.knowledge_tool import retrieve_knowledge
 from app.tools.shell_tool import execute_shell
 from app.agent.mcp_client import get_mcp_client
@@ -158,6 +159,7 @@ async def chat(question: str, session_id: str = "default") -> str:
     except AIOperatorException as e:
         return f"❌ {e.message}"
     except Exception as e:
+        logger.exception("MCP Agent 对话异常 — session_id: {}, question: {}", session_id, question)
         return f"❌ 服务暂时不可用，请稍后重试（详情: {e}）"
 
 
@@ -191,4 +193,5 @@ async def chat_stream(question: str, session_id: str = "default"):
     except AIOperatorException as e:
         yield {"type": "error", "data": e.message}
     except Exception as e:
+        logger.exception("MCP Agent 流式对话异常 — session_id: {}, question: {}", session_id, question)
         yield {"type": "error", "data": f"服务暂时不可用，请稍后重试（详情: {e}）"}

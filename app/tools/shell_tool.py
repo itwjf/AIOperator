@@ -106,7 +106,11 @@ def _validate_command(command: str) -> str | None:
 
     # ---- 2b: 提取基础命令（管道第一个命令）----
     # 先处理管道引号问题：统计管道符数量时排除引号内的
-    tokens = shlex.split(command)
+    try:
+        # Windows 下 posix=False，避免把路径反斜杠 \ 当成转义符
+        tokens = shlex.split(command, posix=not IS_WINDOWS)
+    except ValueError:
+        return "命令格式无法解析（引号未闭合或包含非法字符）"
     if not tokens:
         return "空命令"
 
@@ -247,7 +251,7 @@ def execute_shell(command: str) -> str:
             )
         else:
             # 无管道时用 shlex 拆词 + shell=False，更安全
-            tokens = shlex.split(command)
+            tokens = shlex.split(command, posix=not IS_WINDOWS)
             result = subprocess.run(
                 tokens,
                 shell=False,
@@ -262,7 +266,7 @@ def execute_shell(command: str) -> str:
         return f"[超时] 命令执行超过 {timeout} 秒已被终止"
 
     except FileNotFoundError:
-        cmd_name = shlex.split(command)[0]
+        cmd_name = shlex.split(command, posix=not IS_WINDOWS)[0]
         hint = ""
         if IS_WINDOWS:
             hint = "（当前为 Windows 环境，该 Unix 命令不可用）"

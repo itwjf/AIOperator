@@ -116,6 +116,7 @@ async def query(question: str, session_id: str = "default") -> str:
     except AIOperatorException as e:
         return f"❌ {e.message}"
     except Exception as e:
+        logger.exception("RAG Agent 对话异常 — session_id: {}, question: {}", session_id, question)
         return f"❌ 服务暂时不可用，请稍后重试（详情: {e}）"
 
 
@@ -164,4 +165,5 @@ async def query_stream(question: str, session_id: str = "default"):
     except AIOperatorException as e:
         yield {"type": "error", "data": e.message}
     except Exception as e:
+        logger.exception("RAG Agent 流式对话异常 — session_id: {}, question: {}", session_id, question)
         yield {"type": "error", "data": f"服务暂时不可用，请稍后重试（详情: {e}）"}
